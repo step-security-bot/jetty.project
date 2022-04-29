@@ -31,7 +31,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.AsyncListener;
@@ -56,7 +55,6 @@ import jakarta.servlet.http.Part;
 import org.eclipse.jetty.ee10.servlet.security.Authentication;
 import org.eclipse.jetty.ee10.servlet.security.UserIdentity;
 import org.eclipse.jetty.http.BadMessageException;
-import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpHeader;
 import org.eclipse.jetty.http.HttpMethod;
@@ -1156,55 +1154,13 @@ public class ServletContextRequest extends ContextRequest implements Runnable
         @Override
         public Locale getLocale()
         {
-            HttpFields fields = getFields();
-            if (fields == null)
-                return Locale.getDefault();
-
-            List<String> acceptable = fields.getQualityCSV(HttpHeader.ACCEPT_LANGUAGE);
-
-            // handle no locale
-            if (acceptable.isEmpty())
-                return Locale.getDefault();
-
-            String language = acceptable.get(0);
-            language = HttpField.stripParameters(language);
-            String country = "";
-            int dash = language.indexOf('-');
-            if (dash > -1)
-            {
-                country = language.substring(dash + 1).trim();
-                language = language.substring(0, dash).trim();
-            }
-            return new Locale(language, country);
+            return Request.getLocales(ServletContextRequest.this).get(0);
         }
 
         @Override
         public Enumeration<Locale> getLocales()
         {
-            HttpFields fields = getFields();
-            if (fields == null)
-                return Collections.enumeration(__defaultLocale);
-
-            List<String> acceptable = fields.getQualityCSV(HttpHeader.ACCEPT_LANGUAGE);
-
-            // handle no locale
-            if (acceptable.isEmpty())
-                return Collections.enumeration(__defaultLocale);
-
-            List<Locale> locales = acceptable.stream().map(language ->
-            {
-                language = HttpField.stripParameters(language);
-                String country = "";
-                int dash = language.indexOf('-');
-                if (dash > -1)
-                {
-                    country = language.substring(dash + 1).trim();
-                    language = language.substring(0, dash).trim();
-                }
-                return new Locale(language, country);
-            }).collect(Collectors.toList());
-
-            return Collections.enumeration(locales);
+            return Collections.enumeration(Request.getLocales(ServletContextRequest.this));
         }
 
         @Override
