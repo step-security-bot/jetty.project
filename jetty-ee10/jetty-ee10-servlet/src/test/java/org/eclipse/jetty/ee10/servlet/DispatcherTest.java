@@ -205,7 +205,6 @@ public class DispatcherTest
     }
 
     @Test
-    @Disabled // TODO
     public void testForwardWithBadParams() throws Exception
     {
         try (StacklessLogging ignored = new StacklessLogging(HttpChannel.class))

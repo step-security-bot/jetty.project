@@ -34,6 +34,7 @@ import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import org.eclipse.jetty.ee10.servlet.util.ServletOutputStreamWrapper;
+import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HttpURI;
 import org.eclipse.jetty.util.MultiMap;
 import org.eclipse.jetty.util.StringUtil;
@@ -101,9 +102,12 @@ public class Dispatcher implements RequestDispatcher
         HttpServletRequest httpRequest = (request instanceof HttpServletRequest) ? (HttpServletRequest)request : new ServletRequestHttpWrapper(request);
         HttpServletResponse httpResponse = (response instanceof HttpServletResponse) ? (HttpServletResponse)response : new ServletResponseHttpWrapper(response);
 
+        String targetQuery = _uri.getQuery();
+        MultiMap<String> queryParams = mergeQueryParameters(httpRequest.getQueryString(), targetQuery);
+
         ServletContextRequest baseRequest = Objects.requireNonNull(ServletContextRequest.getBaseRequest(request));
         baseRequest.getResponse().resetForForward();
-        _mappedServlet.handle(_servletHandler, _pathInContext, new ForwardRequest(httpRequest), httpResponse);
+        _mappedServlet.handle(_servletHandler, _pathInContext, new ForwardRequest(httpRequest, queryParams), httpResponse);
 
         // If we are not async and not closed already, then close via the possibly wrapped response.
         if (!baseRequest.getState().isAsync() && !baseRequest.getHttpOutput().isClosed())
@@ -134,6 +138,46 @@ public class Dispatcher implements RequestDispatcher
         HttpServletResponse httpResponse = (response instanceof HttpServletResponse) ? (HttpServletResponse)response : new ServletResponseHttpWrapper(response);
 
         _mappedServlet.handle(_servletHandler, _pathInContext, new AsyncRequest(httpRequest), httpResponse);
+    }
+
+    public MultiMap<String> mergeQueryParameters(String oldQuery, String newQuery)
+    {
+        // Have to assume ENCODING because we can't know otherwise.
+        MultiMap<String> newQueryParams = null;
+        if (newQuery != null)
+        {
+            newQueryParams = new MultiMap<>();
+            UrlEncoded.decodeTo(newQuery, newQueryParams, UrlEncoded.ENCODING);
+        }
+
+        // Have to assume ENCODING because we can't know otherwise.
+        MultiMap<String> oldQueryParams = new MultiMap<>();
+        if (oldQuery != null)
+        {
+            oldQueryParams = new MultiMap<>();
+
+            try
+            {
+                UrlEncoded.decodeTo(oldQuery, oldQueryParams, UrlEncoded.ENCODING);
+            }
+            catch (Throwable t)
+            {
+                throw new BadMessageException(400, "Bad query encoding", t);
+            }
+        }
+
+        MultiMap<String> mergedQueryParams;
+        if (newQueryParams == null || newQueryParams.size() == 0)
+            mergedQueryParams = oldQueryParams;
+        else if (oldQueryParams.size() == 0)
+            mergedQueryParams = newQueryParams;
+        else
+        {
+            // Parameters values are accumulated.
+            mergedQueryParams = new MultiMap<>(newQueryParams);
+            mergedQueryParams.addAllValues(oldQueryParams);
+        }
+        return mergedQueryParams;
     }
 
     public class ParameterRequestWrapper extends HttpServletRequestWrapper
@@ -195,11 +239,13 @@ public class Dispatcher implements RequestDispatcher
     private class ForwardRequest extends ParameterRequestWrapper
     {
         private final HttpServletRequest _httpServletRequest;
+        private final MultiMap<String> _queryParams;
 
-        public ForwardRequest(HttpServletRequest httpRequest)
+        public ForwardRequest(HttpServletRequest httpRequest, MultiMap<String> queryParams)
         {
             super(httpRequest);
             _httpServletRequest = httpRequest;
+            _queryParams = queryParams;
         }
 
         @Override
@@ -233,13 +279,35 @@ public class Dispatcher implements RequestDispatcher
         @Override
         public String getQueryString()
         {
-            if (_uri != null)
-            {
-                String targetQuery = _uri.getQuery();
-                if (!StringUtil.isEmpty(targetQuery))
-                    return targetQuery;
-            }
-            return _httpServletRequest.getQueryString();
+            return _queryParams.toString();
+        }
+
+        @Override
+        public String getParameter(String name)
+        {
+            // TODO: how to use new merged query params.
+            return super.getParameter(name);
+        }
+
+        @Override
+        public Map<String, String[]> getParameterMap()
+        {
+            // TODO: how to use new merged query params.
+            return super.getParameterMap();
+        }
+
+        @Override
+        public Enumeration<String> getParameterNames()
+        {
+            // TODO: how to use new merged query params.
+            return super.getParameterNames();
+        }
+
+        @Override
+        public String[] getParameterValues(String name)
+        {
+            // TODO: how to use new merged query params.
+            return super.getParameterValues(name);
         }
 
         @Override
