@@ -312,7 +312,6 @@ public class DispatcherTest
     }
 
     @Test
-    @Disabled // TODO
     public void testIncludeThenForward() throws Exception
     {
         _contextHandler.addServlet(IncludeServlet.class, "/IncludeServlet/*");
