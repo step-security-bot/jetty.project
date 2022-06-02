@@ -14,10 +14,13 @@
 package org.eclipse.jetty.ee10.servlet;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.security.Principal;
 import java.util.ArrayList;
@@ -35,6 +38,7 @@ import java.util.concurrent.ExecutionException;
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.MultipartConfigElement;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.ServletConnection;
 import jakarta.servlet.ServletContext;
@@ -55,6 +59,7 @@ import jakarta.servlet.http.Part;
 import org.eclipse.jetty.ee10.servlet.security.Authentication;
 import org.eclipse.jetty.ee10.servlet.security.UserIdentity;
 import org.eclipse.jetty.http.BadMessageException;
+import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpHeader;
 import org.eclipse.jetty.http.HttpMethod;
@@ -63,6 +68,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.http.HttpURI;
 import org.eclipse.jetty.http.HttpVersion;
 import org.eclipse.jetty.http.MimeTypes;
+import org.eclipse.jetty.io.RuntimeIOException;
 import org.eclipse.jetty.server.ConnectionMetaData;
 import org.eclipse.jetty.server.FutureFormFields;
 import org.eclipse.jetty.server.Request;
@@ -72,9 +78,12 @@ import org.eclipse.jetty.server.handler.ContextRequest;
 import org.eclipse.jetty.server.handler.ContextResponse;
 import org.eclipse.jetty.session.Session;
 import org.eclipse.jetty.session.SessionManager;
+import org.eclipse.jetty.util.Blocking;
 import org.eclipse.jetty.util.Callback;
 import org.eclipse.jetty.util.Fields;
 import org.eclipse.jetty.util.HostPort;
+import org.eclipse.jetty.util.IO;
+import org.eclipse.jetty.util.MultiMap;
 import org.eclipse.jetty.util.StringUtil;
 import org.eclipse.jetty.util.URIUtil;
 import org.slf4j.Logger;
@@ -120,6 +129,7 @@ public class ServletContextRequest extends ContextRequest implements Runnable
     final HttpInput _httpInput;
     final String _pathInContext;
     Charset _queryEncoding;
+    private MultiPartFormInputStream _multiParts;
 
     final List<ServletRequestAttributeListener> _requestAttributeListeners = new ArrayList<>();
 
@@ -729,15 +739,17 @@ public class ServletContextRequest extends ContextRequest implements Runnable
         @Override
         public Collection<Part> getParts() throws IOException, ServletException
         {
-            // TODO
-            return null;
+            String contentType = getContentType();
+            if (contentType == null || !MimeTypes.Type.MULTIPART_FORM_DATA.is(HttpField.valueParameters(contentType, null)))
+                throw new ServletException("Unsupported Content-Type [" + contentType + "], expected [multipart/form-data]");
+            return getParts(null);
         }
 
         @Override
         public Part getPart(String name) throws IOException, ServletException
         {
-            // TODO
-            return null;
+            getParts();
+            return _multiParts.getPart(name);
         }
 
         @Override
@@ -938,7 +950,7 @@ public class ServletContextRequest extends ContextRequest implements Runnable
                     {
                         extractContentParameters();
                     }
-                    catch (IllegalStateException | IllegalArgumentException | ExecutionException | InterruptedException e)
+                    catch (IllegalStateException | IllegalArgumentException | ExecutionException | InterruptedException | IOException e)
                     {
                         LOG.warn(e.toString());
                         throw new BadMessageException("Unable to parse form content", e);
@@ -968,11 +980,105 @@ public class ServletContextRequest extends ContextRequest implements Runnable
             return parameters == null ? NO_PARAMS : parameters;
         }
 
-        private void extractContentParameters() throws ExecutionException, InterruptedException
+        private void extractContentParameters() throws ExecutionException, InterruptedException, IOException
         {
-            _contentParameters =  FutureFormFields.forRequest(getRequest()).get();
-            if (_contentParameters == null || _contentParameters.isEmpty())
+            String contentType = getContentType();
+            if (contentType == null || contentType.isEmpty())
                 _contentParameters = NO_PARAMS;
+            else
+            {
+                int contentLength = getContentLength();
+                if (contentLength != 0 && _inputState == INPUT_NONE)
+                {
+                    String baseType = HttpField.valueParameters(contentType, null);
+                    if (MimeTypes.Type.FORM_ENCODED.is(baseType) && getConnectionMetaData().getHttpConfiguration().isFormEncodedMethod(getMethod()))
+                    {
+                        _contentParameters =  FutureFormFields.forRequest(getRequest()).get();
+                        if (_contentParameters == null || _contentParameters.isEmpty())
+                            _contentParameters = NO_PARAMS;
+                    }
+                    else if (MimeTypes.Type.MULTIPART_FORM_DATA.is(baseType) && getAttribute(__MULTIPART_CONFIG_ELEMENT) != null)
+                    {
+                        getParts(_contentParameters);
+                    }
+                }
+            }
+        }
+
+        private Collection<Part> getParts(Fields fields) throws IOException
+        {
+            if (_multiParts == null)
+            {
+                MultipartConfigElement config = (MultipartConfigElement)getAttribute(__MULTIPART_CONFIG_ELEMENT);
+                if (config == null)
+                    throw new IllegalStateException("No multipart config for servlet");
+
+                _multiParts = FutureMultiPartFormFields.forRequest(getRequest());
+                if (_multiParts == null)
+                    return Collections.emptySet();
+                try (Blocking.Callback blocker = Blocking.callback())
+                {
+                    _multiParts.parse(blocker);
+                    blocker.block();
+                }
+
+                String formCharset = null;
+                Part charsetPart = _multiParts.getPart("_charset_");
+                if (charsetPart != null)
+                {
+                    try (InputStream is = charsetPart.getInputStream())
+                    {
+                        ByteArrayOutputStream os = new ByteArrayOutputStream();
+                        IO.copy(is, os);
+                        formCharset = os.toString(StandardCharsets.UTF_8);
+                    }
+                }
+
+                /*
+                Select Charset to use for this part. (NOTE: charset behavior is for the part value only and not the part header/field names)
+                    1. Use the part specific charset as provided in that part's Content-Type header; else
+                    2. Use the overall default charset. Determined by:
+                        a. if part name _charset_ exists, use that part's value.
+                        b. if the request.getCharacterEncoding() returns a value, use that.
+                            (note, this can be either from the charset field on the request Content-Type
+                            header, or from a manual call to request.setCharacterEncoding())
+                        c. use utf-8.
+                 */
+                Charset defaultCharset;
+                if (formCharset != null)
+                    defaultCharset = Charset.forName(formCharset);
+                else if (getCharacterEncoding() != null)
+                    defaultCharset = Charset.forName(getCharacterEncoding());
+                else
+                    defaultCharset = StandardCharsets.UTF_8;
+
+                ByteArrayOutputStream os = null;
+                for (Part p : _multiParts.getParts())
+                {
+                    if (p.getSubmittedFileName() == null)
+                    {
+                        // Servlet Spec 3.0 pg 23, parts without filename must be put into params.
+                        String charset = null;
+                        if (p.getContentType() != null)
+                            charset = MimeTypes.getCharsetFromContentType(p.getContentType());
+
+                        try (InputStream is = p.getInputStream())
+                        {
+                            if (os == null)
+                                os = new ByteArrayOutputStream();
+                            IO.copy(is, os);
+
+                            String content = os.toString(charset == null ? defaultCharset : Charset.forName(charset));
+                            if (_contentParameters == null)
+                                _contentParameters = fields == null ? new Fields() : fields;
+                            _contentParameters.add(p.getName(), content);
+                        }
+                        os.reset();
+                    }
+                }
+            }
+
+            return _multiParts.getParts();
         }
 
         private void extractQueryParameters()
