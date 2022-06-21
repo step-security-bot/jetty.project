@@ -13,6 +13,7 @@
 
 package org.eclipse.jetty.websocket.tests.client;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -22,9 +23,15 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
+import org.eclipse.jetty.client.DuplexConnectionPool;
+import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -50,17 +57,32 @@ import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class WebSocketClientTest
 {
     private Server server;
     private WebSocketClient client;
+
+    public static class HelloWorldServlet extends HttpServlet
+    {
+        @Override
+        protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException
+        {
+            for (int i = 0; i < 1024; i++)
+            {
+                resp.getWriter().println("hello world");
+            }
+        }
+    }
 
     @BeforeEach
     public void startClient() throws Exception
@@ -81,6 +103,7 @@ public class WebSocketClientTest
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");
 
+        context.addServlet(HelloWorldServlet.class, "/non-upgrade");
         JettyWebSocketServletContainerInitializer.configure(context,
             (servletContext, configuration) ->
             {
@@ -400,5 +423,33 @@ public class WebSocketClientTest
             assertThat("Parameter[brand]", received, containsString("Params[brand]=[off]"));
             assertThat("Parameter[cost]", received, not(containsString("Params[cost]=")));
         }
+    }
+
+    @Test
+    public void testConnectionPoolAfterFailedUpgrade() throws Exception
+    {
+        CloseTrackingEndpoint clientEndpoint = new CloseTrackingEndpoint();
+        URI wsUri = WSURI.toWebsocket(server.getURI().resolve("/non-upgrade"));
+
+        // Send upgrades which will fail with a 200 response and content.
+        int numConnections = 10;
+        CountDownLatch countDownLatch = new CountDownLatch(numConnections);
+        for (int i = 0; i < numConnections; i++)
+        {
+            client.connect(clientEndpoint, wsUri).whenComplete((session, throwable) ->
+            {
+                if (throwable != null)
+                    countDownLatch.countDown();
+            });
+        }
+        assertTrue(countDownLatch.await(5, TimeUnit.SECONDS));
+
+        // Should we have idle connections in the pool?
+        HttpClient httpClient = client.getHttpClient();
+        DuplexConnectionPool connectionPool = httpClient.getContainedBeans(DuplexConnectionPool.class).stream().findAny().orElse(null);
+        assertNotNull(connectionPool);
+        assertThat(connectionPool.getActiveConnectionCount(), equalTo(0));
+        assertThat(connectionPool.getIdleConnectionCount(), equalTo(0)); // <-- fails here.
+        assertThat(connectionPool.getConnectionCount(), equalTo(0));
     }
 }
