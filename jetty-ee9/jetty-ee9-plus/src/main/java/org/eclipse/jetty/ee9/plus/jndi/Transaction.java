@@ -19,7 +19,6 @@ import javax.naming.LinkRef;
 import javax.naming.NameNotFoundException;
 import javax.naming.NamingException;
 
-import jakarta.transaction.UserTransaction;
 import org.eclipse.jetty.jndi.NamingUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,13 +53,42 @@ public class Transaction extends NamingEntry
      * @param userTransaction
      * @throws NamingException
      */
-    public Transaction(String scope, UserTransaction userTransaction)
+    public Transaction(Object scope, Object userTransaction)
         throws NamingException
     {
         super(scope, USER_TRANSACTION);
+        if (!checkType(userTransaction))
+            throw new NamingException("Inappropriate type for UserTransaction");
         save(userTransaction);
     }
 
+    private boolean checkType(Object userTransaction)
+    {
+        Class<?> userTxClazz;
+        try
+        {
+            //try jakarta
+            userTxClazz = Thread.currentThread().getContextClassLoader().loadClass("jakarta.transaction.UserTransaction");
+        }
+        catch (ClassNotFoundException e)
+        {
+            //try javax
+            try
+            {
+                userTxClazz = Thread.currentThread().getContextClassLoader().loadClass("javax.transaction.UserTransaction");
+            }
+            catch (ClassNotFoundException x)
+            {
+                return false;
+            }
+        }
+        
+        if (!userTxClazz.isAssignableFrom(userTransaction.getClass()))
+            return false;
+        
+        return true;
+    }
+    
     /**
      * Allow other bindings of UserTransaction.
      *
