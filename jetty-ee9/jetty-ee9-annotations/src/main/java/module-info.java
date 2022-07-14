@@ -20,6 +20,8 @@ module org.eclipse.jetty.ee9.annotations
     requires java.naming;
     requires org.slf4j;
 
+    requires transitive org.eclipse.jetty.jndi;
+    requires transitive org.eclipse.jetty.plus;
     requires transitive org.eclipse.jetty.ee9.plus;
     requires transitive org.objectweb.asm;
 

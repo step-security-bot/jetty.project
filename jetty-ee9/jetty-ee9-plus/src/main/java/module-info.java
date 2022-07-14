@@ -16,9 +16,10 @@ import org.eclipse.jetty.ee9.plus.webapp.PlusConfiguration;
 
 module org.eclipse.jetty.ee9.plus
 {
-    requires org.eclipse.jetty.jndi;
     requires org.slf4j;
 
+    requires transitive org.eclipse.jetty.jndi;
+    requires transitive org.eclipse.jetty.plus;
     requires transitive org.eclipse.jetty.ee9.webapp;
 
     // Only required if using DataSourceLoginService.
@@ -29,7 +30,6 @@ module org.eclipse.jetty.ee9.plus
     requires static org.eclipse.jetty.ee9.servlet;
 
     exports org.eclipse.jetty.ee9.plus.annotation;
-    exports org.eclipse.jetty.ee9.plus.jndi;
     exports org.eclipse.jetty.ee9.plus.security;
     exports org.eclipse.jetty.ee9.plus.webapp;
 

@@ -13,8 +13,9 @@
 
 module org.eclipse.jetty.plus
 {
-    requires org.eclipse.jetty.jndi;
     requires org.slf4j;
+
+    requires transitive org.eclipse.jetty.jndi;
 
     exports org.eclipse.jetty.plus.jndi;
 }

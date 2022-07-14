@@ -27,6 +27,7 @@
     <module>jetty-jmx</module>
     <module>jetty-jndi</module>
     <module>jetty-keystore</module>
+    <module>jetty-plus</module>
     <module>jetty-quic</module>
     <module>jetty-rewrite</module>
     <module>jetty-server</module>

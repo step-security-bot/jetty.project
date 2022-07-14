@@ -285,12 +285,12 @@
                   <version>${project.version}</version>
                   <type>zip</type>
                 </artifactItem>
-                <artifactItem>
+                <!-- artifactItem>
                   <groupId>org.eclipse.jetty.ee8</groupId>
                   <artifactId>jetty-ee8-home</artifactId>
                   <version>${project.version}</version>
                   <type>zip</type>
-                </artifactItem>
+                </artifactItem -->
               </artifactItems>
               <outputDirectory>${assembly-directory}</outputDirectory>
             </configuration>
@@ -436,13 +436,13 @@
 
   <dependencyManagement>
     <dependencies>
-      <dependency>
+      <!-- dependency>
         <groupId>org.eclipse.jetty.ee8</groupId>
         <artifactId>jetty-ee8-bom</artifactId>
         <version>${project.version}</version>
         <type>pom</type>
         <scope>import</scope>
-      </dependency>
+      </dependency -->
       <dependency>
         <groupId>org.eclipse.jetty.ee9</groupId>
         <artifactId>jetty-ee9-bom</artifactId>
@@ -531,12 +531,12 @@
       <version>${project.version}</version>
       <type>zip</type>
     </dependency>
-    <dependency>
+    <!-- dependency>
       <groupId>org.eclipse.jetty.ee8</groupId>
       <artifactId>jetty-ee8-home</artifactId>
       <version>${project.version}</version>
       <type>zip</type>
-    </dependency>
+    </dependency -->
     <dependency>
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-client</artifactId>

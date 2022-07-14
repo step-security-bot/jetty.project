@@ -7,10 +7,10 @@ ee9
 [depend]
 server
 jndi
+plus
 ee9-security
 ee9-webapp
 
 [lib]
-lib/jetty-plus-${jetty.version}.jar
 lib/jetty-ee9-plus-${jetty.version}.jar
 lib/jakarta.transaction-api-2.0.1.jar
