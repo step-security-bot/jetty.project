@@ -28,11 +28,11 @@ import javax.naming.NameNotFoundException;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 
-import org.eclipse.jetty.ee9.plus.jndi.NamingEntryUtil;
 import org.eclipse.jetty.ee9.security.AbstractLoginService;
 import org.eclipse.jetty.ee9.security.IdentityService;
 import org.eclipse.jetty.ee9.security.RolePrincipal;
 import org.eclipse.jetty.ee9.security.UserPrincipal;
+import org.eclipse.jetty.plus.jndi.NamingEntryUtil;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.util.security.Credential;
 import org.slf4j.Logger;

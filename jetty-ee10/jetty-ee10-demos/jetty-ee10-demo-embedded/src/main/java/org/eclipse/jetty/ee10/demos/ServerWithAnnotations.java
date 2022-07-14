@@ -19,14 +19,14 @@ import java.nio.file.Path;
 import javax.naming.NamingException;
 
 import org.eclipse.jetty.ee10.annotations.AnnotationConfiguration;
-import org.eclipse.jetty.ee10.plus.jndi.EnvEntry;
-import org.eclipse.jetty.ee10.plus.jndi.NamingDump;
-import org.eclipse.jetty.ee10.plus.jndi.Resource;
-import org.eclipse.jetty.ee10.plus.jndi.Transaction;
 import org.eclipse.jetty.ee10.plus.webapp.EnvConfiguration;
 import org.eclipse.jetty.ee10.plus.webapp.PlusConfiguration;
 import org.eclipse.jetty.ee10.servlet.security.HashLoginService;
 import org.eclipse.jetty.ee10.webapp.WebAppContext;
+import org.eclipse.jetty.plus.jndi.EnvEntry;
+import org.eclipse.jetty.plus.jndi.NamingDump;
+import org.eclipse.jetty.plus.jndi.Resource;
+import org.eclipse.jetty.plus.jndi.Transaction;
 import org.eclipse.jetty.server.Server;
 
 /**

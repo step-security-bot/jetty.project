@@ -11,47 +11,44 @@
 // ========================================================================
 //
 
-package org.eclipse.jetty.ee9.plus.jndi;
+package org.eclipse.jetty.plus.jndi;
 
 import javax.naming.NamingException;
 
-/**
- * EnvEntry
- */
-public class EnvEntry extends NamingEntry
+public class Link extends NamingEntry
 {
-    private boolean overrideWebXml;
+    private final String _link;
 
-    public EnvEntry(Object scope, String jndiName, Object objToBind, boolean overrideWebXml)
-        throws NamingException
+    public Link(Object scope, String jndiName, String link) throws NamingException
     {
+        //jndiName is the name according to the web.xml
+        //objectToBind is the name in the environment
         super(scope, jndiName);
-        save(objToBind);
-        this.overrideWebXml = overrideWebXml;
+        save(link);
+        _link = link;
     }
 
-    public EnvEntry(String jndiName, Object objToBind, boolean overrideWebXml)
-        throws NamingException
+    public Link(String jndiName, String link) throws NamingException
     {
         super(jndiName);
-        save(objToBind);
-        this.overrideWebXml = overrideWebXml;
+        save(link);
+        _link = link;
     }
 
-    public EnvEntry(String jndiName, Object objToBind)
-        throws NamingException
+    @Override
+    public void bindToENC(String localName) throws NamingException
     {
-        this(jndiName, objToBind, false);
+        throw new UnsupportedOperationException("Method not supported for Link objects");
     }
 
-    public boolean isOverrideWebXml()
+    public String getLink()
     {
-        return this.overrideWebXml;
+        return _link;
     }
 
     @Override
     protected String toStringMetaData()
     {
-        return "OverrideWebXml=" + overrideWebXml;
+        return _link;
     }
 }

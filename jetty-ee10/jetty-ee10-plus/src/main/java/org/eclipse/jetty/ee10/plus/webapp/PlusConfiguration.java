@@ -19,7 +19,6 @@ import javax.naming.NameNotFoundException;
 
 import org.eclipse.jetty.ee10.plus.annotation.InjectionCollection;
 import org.eclipse.jetty.ee10.plus.annotation.LifeCycleCallbackCollection;
-import org.eclipse.jetty.ee10.plus.jndi.Transaction;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.webapp.AbstractConfiguration;
 import org.eclipse.jetty.ee10.webapp.FragmentConfiguration;
@@ -28,6 +27,7 @@ import org.eclipse.jetty.ee10.webapp.MetaInfConfiguration;
 import org.eclipse.jetty.ee10.webapp.WebAppContext;
 import org.eclipse.jetty.ee10.webapp.WebXmlConfiguration;
 import org.eclipse.jetty.jndi.NamingContext;
+import org.eclipse.jetty.plus.jndi.Transaction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
