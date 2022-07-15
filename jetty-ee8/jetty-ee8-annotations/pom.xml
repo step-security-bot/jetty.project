@@ -12,7 +12,7 @@
   <properties>
     <ee9.module>jetty-ee9-annotations</ee9.module>
     <bundle-symbolic-name>${project.groupId}.annotations</bundle-symbolic-name>
-    <spotbugs.onlyAnalyze>org.eclipse.annotations.*</spotbugs.onlyAnalyze>
+    <spotbugs.onlyAnalyze>org.eclipse.ee8.annotations.*</spotbugs.onlyAnalyze>
   </properties>
 
   <build>
@@ -108,11 +108,6 @@
     <dependency>
       <groupId>org.eclipse.jetty.toolchain</groupId>
       <artifactId>jetty-test-helper</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-jndi</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
