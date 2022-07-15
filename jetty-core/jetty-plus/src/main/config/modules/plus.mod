@@ -5,6 +5,7 @@ Adds the Jetty JNDI resource factories to the classpath.
 
 [depend]
 server
+jndi
 
 [lib]
 lib/jetty-plus-${jetty.version}.jar

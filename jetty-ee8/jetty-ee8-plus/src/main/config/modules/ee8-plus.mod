@@ -6,7 +6,7 @@ ee8
 
 [depend]
 plus
-ee-security
+ee8-security
 ee8-webapp
 
 [lib]
