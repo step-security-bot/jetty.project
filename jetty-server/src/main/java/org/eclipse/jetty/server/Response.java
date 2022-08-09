@@ -721,6 +721,9 @@ public class Response implements HttpServletResponse
             throw new IllegalArgumentException();
         if (isMutable())
         {
+            if (sc == 400)
+                StatusInstrumentation.trigger(this);
+
             // Null the reason only if the status is different. This allows
             // a specific reason to be sent with setStatusWithReason followed by sendError.
             if (_status != sc)
@@ -742,6 +745,8 @@ public class Response implements HttpServletResponse
             throw new IllegalArgumentException();
         if (isMutable())
         {
+            if (sc == 400)
+                StatusInstrumentation.trigger(this);
             _status = sc;
             _reason = sm;
         }
@@ -1409,5 +1414,80 @@ public class Response implements HttpServletResponse
             return unwrap(((ServletResponseWrapper)servletResponse).getResponse());
         }
         return (HttpServletResponse)servletResponse;
+    }
+
+    private static class StatusInstrumentation
+    {
+        private static final Logger LOG = Log.getLogger(StatusInstrumentation.class);
+        private static final boolean ENABLED = Boolean.getBoolean("org.eclipse.jetty.server.Response.status400Instrumentation");
+
+        public static void trigger(Response response)
+        {
+            if (!ENABLED)
+                return;
+
+            if (!LOG.isDebugEnabled())
+                return;
+
+            try
+            {
+                StringBuilder dump = new StringBuilder();
+                dump.append("Encountered Status 400\n");
+
+                // Dump Thread / Stacktrace info
+                Thread thread = Thread.currentThread();
+                dump.append("Thread Name: ").append(thread).append("\n");
+                StackTraceElement[] stack = thread.getStackTrace();
+                dump.append("Stack Trace: ");
+                for (StackTraceElement element : stack)
+                {
+                    dump.append("  ").append(element.toString()).append("\n");
+                }
+
+                // Dump Response details.
+                if (response == null)
+                {
+                    dump.append("Response is null??\n");
+                }
+                else
+                {
+                    dump.append("Response.toString(): ").append(response).append("\n");
+                    dump.append("Response.isCommitted(): ").append(response.isCommitted()).append("\n");
+                    dump.append("Response.getHttpOutput(): ").append(response.getHttpOutput()).append("\n");
+                    dump.append("Response.getHttpFields(): ").append(response.getHttpFields()).append("\n");
+
+                    // Dump request details.
+                    HttpChannel httpChannel = response.getHttpChannel();
+
+                    if (httpChannel == null)
+                    {
+                        dump.append("Response.getHttpChannel is null??\n");
+                    }
+                    else
+                    {
+                        dump.append("HttpChannel: ").append(httpChannel).append("\n");
+                        Request request = httpChannel.getRequest();
+                        if (request == null)
+                        {
+                            dump.append("Request is null??\n");
+                        }
+                        else
+                        {
+                            dump.append("Request.getInputState(): ").append(request.getInputState()).append("\n");
+                            dump.append("Request.getHttpFields(): ").append(request.getHttpFields()).append("\n");
+                            dump.append("Request.getHttpInput(): ").append(request.getHttpInput()).append("\n");
+                            dump.append("Request.getMetaData(): ").append(request.getMetaData()).append("\n");
+                            dump.append("Request.getDispatcherType(): ").append(request.getDispatcherType()).append("\n");
+                        }
+                    }
+                }
+                LOG.debug("{}", dump.toString());
+            }
+            catch (Throwable t)
+            {
+                // Catch anything untoward that flows out of above.
+                LOG.debug("Unable to produce dump", t);
+            }
+        }
     }
 }
