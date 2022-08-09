@@ -18,13 +18,11 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Objects;
 
 import org.eclipse.jetty.ee9.servlet.DefaultServlet;
 import org.eclipse.jetty.ee9.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee9.servlet.ServletHolder;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.util.FileID;
 import org.eclipse.jetty.util.URIUtil;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.resource.ResourceFactory;
@@ -35,13 +33,13 @@ import org.eclipse.jetty.util.resource.ResourceFactory;
  */
 public class JarServer
 {
-    public static Server createServer(int port, URI jarBase) throws Exception
+    public static Server createServer(int port) throws Exception
     {
-        Objects.requireNonNull(jarBase);
+        Path jarFile = Paths.get("src/main/other/content.jar");
+        if (!Files.exists(jarFile))
+            throw new FileNotFoundException(jarFile.toString());
 
-        URI baseUri = jarBase;
-        if (FileID.isArchive(baseUri))
-            baseUri = URIUtil.toJarFileUri(baseUri);
+        URI baseUri = URIUtil.toJarFileUri(jarFile.toUri());
 
         Server server = new Server(port);
         Resource baseResource = ResourceFactory.of(server).newResource(baseUri);
@@ -59,11 +57,7 @@ public class JarServer
     {
         int port = ExampleUtil.getPort(args, "jetty.http.port", 8080);
 
-        Path jarFile = Paths.get("src/main/other/content.jar");
-        if (!Files.exists(jarFile))
-            throw new FileNotFoundException(jarFile.toString());
-
-        Server server = createServer(port, jarFile.toUri());
+        Server server = createServer(port);
         server.start();
         server.join();
     }
