@@ -23,18 +23,29 @@ import org.eclipse.jetty.server.Connector;
 
 public class NestedConnectionFactory implements ConnectionFactory
 {
-    private static final String PROTOCOL = "nested-jetty";
+    private static final String DEFAULT_PROTOCOL = "nested-jetty";
+    private final String _protocol;
+
+    public NestedConnectionFactory()
+    {
+        this(DEFAULT_PROTOCOL);
+    }
+
+    public NestedConnectionFactory(String protocol)
+    {
+        _protocol = protocol;
+    }
 
     @Override
     public String getProtocol()
     {
-        return PROTOCOL;
+        return _protocol;
     }
 
     @Override
     public List<String> getProtocols()
     {
-        return Collections.singletonList(PROTOCOL);
+        return Collections.singletonList(_protocol);
     }
 
     @Override

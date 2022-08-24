@@ -21,7 +21,7 @@ import org.eclipse.jetty.server.Server;
 
 public class NestedConnector extends AbstractConnector
 {
-    HttpConfiguration _httpConfiguration = new HttpConfiguration();
+    private final HttpConfiguration _httpConfiguration = new HttpConfiguration();
 
     public NestedConnector(Server server)
     {
