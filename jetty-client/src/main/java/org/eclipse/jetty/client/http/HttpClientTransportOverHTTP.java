@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -14,6 +14,7 @@
 package org.eclipse.jetty.client.http;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.util.List;
 import java.util.Map;
 
@@ -68,7 +69,8 @@ public class HttpClientTransportOverHTTP extends AbstractConnectorHttpClientTran
     @Override
     public HttpDestination newHttpDestination(Origin origin)
     {
-        return new DuplexHttpDestination(getHttpClient(), origin);
+        SocketAddress address = origin.getAddress().getSocketAddress();
+        return new DuplexHttpDestination(getHttpClient(), origin, getClientConnector().isIntrinsicallySecure(address));
     }
 
     @Override

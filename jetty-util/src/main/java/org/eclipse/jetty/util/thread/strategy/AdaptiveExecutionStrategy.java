@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -21,6 +21,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.LongAdder;
 
 import org.eclipse.jetty.util.IO;
+import org.eclipse.jetty.util.VirtualThreads;
 import org.eclipse.jetty.util.annotation.ManagedAttribute;
 import org.eclipse.jetty.util.annotation.ManagedObject;
 import org.eclipse.jetty.util.annotation.ManagedOperation;
@@ -136,11 +137,12 @@ public class AdaptiveExecutionStrategy extends ContainerLifeCycle implements Exe
     private final Executor _executor;
     private final TryExecutor _tryExecutor;
     private final Runnable _runPendingProducer = () -> tryProduce(true);
+    private boolean _useVirtualThreads;
     private State _state = State.IDLE;
     private boolean _pending;
 
     /**
-     * @param producer The produce of tasks to be consumed.
+     * @param producer The producer of tasks to be consumed.
      * @param executor The executor to be used for executing producers or consumers, depending on the sub-strategy.
      */
     public AdaptiveExecutionStrategy(Producer producer, Executor executor)
@@ -152,6 +154,13 @@ public class AdaptiveExecutionStrategy extends ContainerLifeCycle implements Exe
         addBean(_tryExecutor);
         if (LOG.isDebugEnabled())
             LOG.debug("{} created", this);
+    }
+
+    @Override
+    protected void doStart() throws Exception
+    {
+        super.doStart();
+        _useVirtualThreads = VirtualThreads.isUseVirtualThreads(_executor);
     }
 
     @Override
@@ -296,26 +305,26 @@ public class AdaptiveExecutionStrategy extends ContainerLifeCycle implements Exe
             case EITHER:
                 // The produced task may be run either as blocking or non blocking.
 
-                // If the calling producing thread may also block
-                if (!nonBlocking)
+                // If the calling producing thread is already non-blocking, use PC.
+                if (nonBlocking)
+                    return SubStrategy.PRODUCE_CONSUME;
+
+                // Take the lock to atomically check if a pending producer is available.
+                try (AutoLock l = _lock.lock())
                 {
-                    // Take the lock to atomically check if a pending producer is available.
-                    try (AutoLock l = _lock.lock())
+                    // If a pending producer is available or one can be started
+                    if (_pending || _tryExecutor.tryExecute(_runPendingProducer))
                     {
-                        // If a pending producer is available or one can be started
-                        if (_pending || _tryExecutor.tryExecute(_runPendingProducer))
-                        {
-                            // use EPC: The producer directly consumes the task, which may block
-                            // and then races with the pending producer to resume production.
-                            _pending = true;
-                            _state = State.IDLE;
-                            return SubStrategy.EXECUTE_PRODUCE_CONSUME;
-                        }
+                        // Use EPC: the producer directly consumes the task, which may block
+                        // and then races with the pending producer to resume production.
+                        _pending = true;
+                        _state = State.IDLE;
+                        return SubStrategy.EXECUTE_PRODUCE_CONSUME;
                     }
                 }
 
-                // otherwise use PIC: The producer consumers the task in non-blocking mode
-                // and then resumes production.
+                // Otherwise use PIC: the producer consumes the task
+                // in non-blocking mode and then resumes production.
                 return SubStrategy.PRODUCE_INVOKE_CONSUME;
 
             case BLOCKING:
@@ -462,7 +471,10 @@ public class AdaptiveExecutionStrategy extends ContainerLifeCycle implements Exe
     {
         try
         {
-            _executor.execute(task);
+            if (isUseVirtualThreads())
+                VirtualThreads.executeOnVirtualThread(task);
+            else
+                _executor.execute(task);
         }
         catch (RejectedExecutionException e)
         {
@@ -474,6 +486,12 @@ public class AdaptiveExecutionStrategy extends ContainerLifeCycle implements Exe
             if (task instanceof Closeable)
                 IO.close((Closeable)task);
         }
+    }
+
+    @ManagedAttribute(value = "whether this execution strategy uses virtual threads", readonly = true)
+    public boolean isUseVirtualThreads()
+    {
+        return _useVirtualThreads;
     }
 
     @ManagedAttribute(value = "number of tasks consumed with PC mode", readonly = true)

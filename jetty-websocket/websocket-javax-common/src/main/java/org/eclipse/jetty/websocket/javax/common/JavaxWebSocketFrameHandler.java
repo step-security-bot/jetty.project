@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -584,6 +584,7 @@ public class JavaxWebSocketFrameHandler implements FrameHandler
         if (activeMessageSink == null)
         {
             callback.succeeded();
+            coreSession.demand(1);
             return;
         }
 
@@ -595,10 +596,11 @@ public class JavaxWebSocketFrameHandler implements FrameHandler
 
     public void onPing(Frame frame, Callback callback)
     {
-        ByteBuffer payload = BufferUtil.copy(frame.getPayload());
-        coreSession.sendFrame(new Frame(OpCode.PONG).setPayload(payload), Callback.NOOP, false);
-        callback.succeeded();
-        coreSession.demand(1);
+        coreSession.sendFrame(new Frame(OpCode.PONG).setPayload(frame.getPayload()), Callback.from(() ->
+        {
+            callback.succeeded();
+            coreSession.demand(1);
+        }), false);
     }
 
     public void onPong(Frame frame, Callback callback)

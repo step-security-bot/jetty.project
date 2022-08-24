@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -79,7 +79,7 @@ public class HttpConnectionOverFCGI extends AbstractConnection implements IConne
         this.parser = new ClientParser(new ResponseListener());
         requests.addLast(0);
         HttpClient client = destination.getHttpClient();
-        this.networkByteBufferPool = RetainableByteBufferPool.findOrAdapt(client, client.getByteBufferPool());
+        this.networkByteBufferPool = client.getByteBufferPool().asRetainableByteBufferPool();
     }
 
     public HttpDestination getHttpDestination()
@@ -211,9 +211,10 @@ public class HttpConnectionOverFCGI extends AbstractConnection implements IConne
     public boolean onIdleExpired()
     {
         long idleTimeout = getEndPoint().getIdleTimeout();
-        boolean close = delegate.onIdleTimeout(idleTimeout);
+        TimeoutException failure = new TimeoutException("Idle timeout " + idleTimeout + " ms");
+        boolean close = delegate.onIdleTimeout(idleTimeout, failure);
         if (close)
-            close(new TimeoutException("Idle timeout " + idleTimeout + " ms"));
+            close(failure);
         return false;
     }
 

@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -1823,7 +1823,12 @@ public class XmlConfiguration
                         properties.put(arg.substring(0, i), arg.substring(i + 1));
                     }
                     else if (arg.toLowerCase(Locale.ENGLISH).endsWith(".properties"))
-                        properties.load(Resource.newResource(arg).getInputStream());
+                    {
+                        try (InputStream inputStream = Resource.newResource(arg).getInputStream())
+                        {
+                            properties.load(inputStream);
+                        }
+                    }
                 }
 
                 // For all arguments, parse XMLs

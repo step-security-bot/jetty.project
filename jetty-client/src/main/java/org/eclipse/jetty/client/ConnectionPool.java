@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -123,5 +123,16 @@ public interface ConnectionPool extends Closeable
         default void setMaxMultiplex(int maxMultiplex)
         {
         }
+    }
+
+    /**
+     * Marks a connection as being usable for a maximum number of requests.
+     */
+    interface MaxUsable
+    {
+        /**
+         * @return the max number of requests on a single connection
+         */
+        int getMaxUsageCount();
     }
 }

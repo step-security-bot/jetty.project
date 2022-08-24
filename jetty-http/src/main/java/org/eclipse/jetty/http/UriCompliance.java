@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -59,7 +59,7 @@ public final class UriCompliance implements ComplianceViolation.Mode
          */
         AMBIGUOUS_PATH_SEPARATOR("https://tools.ietf.org/html/rfc3986#section-3.3", "Ambiguous URI path separator"),
         /**
-         * Allow ambiguous path parameters within a URI segment e.g. <code>/foo/..;/bar</code>
+         * Allow ambiguous path parameters within a URI segment e.g. <code>/foo/..;/bar</code> or <code>/foo/%2e%2e;param/bar</code>
          */
         AMBIGUOUS_PATH_PARAMETER("https://tools.ietf.org/html/rfc3986#section-3.3", "Ambiguous URI path parameter"),
         /**
@@ -104,7 +104,9 @@ public final class UriCompliance implements ComplianceViolation.Mode
      * additional violations to avoid most ambiguous URIs.
      * This mode does allow {@link Violation#AMBIGUOUS_PATH_SEPARATOR}, but disallows all out {@link Violation}s.
      */
-    public static final UriCompliance DEFAULT = new UriCompliance("DEFAULT", of(Violation.AMBIGUOUS_PATH_SEPARATOR));
+    public static final UriCompliance DEFAULT = new UriCompliance("DEFAULT",
+        of(Violation.AMBIGUOUS_PATH_SEPARATOR,
+            Violation.AMBIGUOUS_PATH_ENCODING));
 
     /**
      * LEGACY compliance mode that models Jetty-9.4 behavior by allowing {@link Violation#AMBIGUOUS_PATH_SEGMENT},

@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -34,8 +34,17 @@ public class MultiplexConnectionPool extends AbstractConnectionPool
 
     public MultiplexConnectionPool(HttpDestination destination, Pool.StrategyType strategy, int maxConnections, boolean cache, Callback requester, int maxMultiplex)
     {
-        super(destination, new Pool<Connection>(strategy, maxConnections, cache)
+        super(destination, new Pool<>(strategy, maxConnections, cache)
         {
+            @Override
+            protected int getMaxUsageCount(Connection connection)
+            {
+                int maxUsage = (connection instanceof MaxUsable)
+                    ? ((MaxUsable)connection).getMaxUsageCount()
+                    : super.getMaxUsageCount(connection);
+                return maxUsage > 0 ? maxUsage : -1;
+            }
+
             @Override
             protected int getMaxMultiplex(Connection connection)
             {

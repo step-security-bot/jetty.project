@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -411,9 +411,8 @@ public abstract class HttpReceiver
         ResponseNotifier notifier = getHttpDestination().getResponseNotifier();
         notifier.notifySuccess(listeners, response);
 
-        // Special case for 100 Continue that cannot
-        // be handled by the ContinueProtocolHandler.
-        if (exchange.getResponse().getStatus() == HttpStatus.CONTINUE_100)
+        // Interim responses do not terminate the exchange.
+        if (HttpStatus.isInterim(exchange.getResponse().getStatus()))
             return true;
 
         // Mark atomically the response as terminated, with

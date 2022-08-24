@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -46,6 +46,8 @@ This event is emitted when the WebSocket communication encounters a fatal error,
 Applications interested in the error event receive a `Throwable` that represent the error.
 * The _message_ event.
 The message event is emitted when a WebSocket message is received.
+Only one thread at a time will be delivering a message event to the `onMessage` method; the next message event will not be delivered until the previous call to the `onMessage` method has exited.
+Endpoints will always be notified of message events in the same order they were received over the network.
 The message event can be of two types:
 ** Textual message event.
 Applications interested in this type of messages receive a `String` representing the UTF-8 bytes received.

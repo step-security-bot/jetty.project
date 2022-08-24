@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -448,7 +448,8 @@ public class HttpClient extends ContainerLifeCycle
             .body(oldRequest.getBody())
             .idleTimeout(oldRequest.getIdleTimeout(), TimeUnit.MILLISECONDS)
             .timeout(oldRequest.getTimeout(), TimeUnit.MILLISECONDS)
-            .followRedirects(oldRequest.isFollowRedirects());
+            .followRedirects(oldRequest.isFollowRedirects())
+            .tag(oldRequest.getTag());
         for (HttpField field : oldRequest.getHeaders())
         {
             HttpHeader header = field.getHeader();
@@ -565,6 +566,9 @@ public class HttpClient extends ContainerLifeCycle
         Map<String, Object> context = new ConcurrentHashMap<>();
         context.put(ClientConnectionFactory.CLIENT_CONTEXT_KEY, HttpClient.this);
         context.put(HttpClientTransport.HTTP_DESTINATION_CONTEXT_KEY, destination);
+        Origin.Protocol protocol = destination.getOrigin().getProtocol();
+        List<String> protocols = protocol != null ? protocol.getProtocols() : List.of("http/1.1");
+        context.put(ClientConnector.APPLICATION_PROTOCOLS_CONTEXT_KEY, protocols);
 
         Origin.Address address = destination.getConnectAddress();
         resolver.resolve(address.getHost(), address.getPort(), new Promise<>()

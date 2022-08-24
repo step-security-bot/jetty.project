@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -677,20 +677,22 @@ public class URIUtilTest
 
             for (Path root : zipFs.getRootDirectories())
             {
-                Stream<Path> entryStream = Files.find(root, 10, (path, attrs) -> true, fileVisitOptions);
-                entryStream.forEach((path) ->
+                try (Stream<Path> entryStream = Files.find(root, 10, (path, attrs) -> true, fileVisitOptions))
                 {
-                    if (path.toString().endsWith("!/"))
+                    entryStream.forEach((path) ->
                     {
-                        // skip - JAR entry type not supported by Jetty
-                        // TODO: re-enable once we start to use zipfs
-                        LOG.warn("Skipping Unsupported entry: " + path.toUri());
-                    }
-                    else
-                    {
-                        arguments.add(Arguments.of(path.toUri(), TEST_RESOURCE_JAR));
-                    }
-                });
+                        if (path.toString().endsWith("!/"))
+                        {
+                            // skip - JAR entry type not supported by Jetty
+                            // TODO: re-enable once we start to use zipfs
+                            LOG.warn("Skipping Unsupported entry: " + path.toUri());
+                        }
+                        else
+                        {
+                            arguments.add(Arguments.of(path.toUri(), TEST_RESOURCE_JAR));
+                        }
+                    });
+                }
             }
         }
 

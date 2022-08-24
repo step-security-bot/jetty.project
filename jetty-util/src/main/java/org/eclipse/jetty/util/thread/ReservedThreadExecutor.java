@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 
 import org.eclipse.jetty.util.AtomicBiInteger;
 import org.eclipse.jetty.util.ProcessorUtils;
+import org.eclipse.jetty.util.VirtualThreads;
 import org.eclipse.jetty.util.annotation.ManagedAttribute;
 import org.eclipse.jetty.util.annotation.ManagedObject;
 import org.eclipse.jetty.util.component.AbstractLifeCycle;
@@ -103,6 +104,8 @@ public class ReservedThreadExecutor extends AbstractLifeCycle implements TryExec
     {
         if (capacity >= 0)
             return capacity;
+        if (VirtualThreads.isUseVirtualThreads(executor))
+            return 0;
         int cpus = ProcessorUtils.availableProcessors();
         if (executor instanceof ThreadPool.SizedThreadPool)
         {
@@ -409,6 +412,11 @@ public class ReservedThreadExecutor extends AbstractLifeCycle implements TryExec
                     catch (Throwable e)
                     {
                         LOG.warn("Unable to run task", e);
+                    }
+                    finally
+                    {
+                        // Clear any interrupted status.
+                        Thread.interrupted();
                     }
                 }
             }

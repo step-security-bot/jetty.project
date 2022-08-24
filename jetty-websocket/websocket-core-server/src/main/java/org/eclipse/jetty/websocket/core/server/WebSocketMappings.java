@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -20,6 +20,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.eclipse.jetty.http.pathmap.MappedResource;
+import org.eclipse.jetty.http.pathmap.MatchedResource;
 import org.eclipse.jetty.http.pathmap.PathMappings;
 import org.eclipse.jetty.http.pathmap.PathSpec;
 import org.eclipse.jetty.http.pathmap.RegexPathSpec;
@@ -142,12 +143,6 @@ public class WebSocketMappings implements Dumpable, LifeCycle.Listener
     }
 
     @Override
-    public String dump()
-    {
-        return Dumpable.dump(this);
-    }
-
-    @Override
     public void dump(Appendable out, String indent) throws IOException
     {
         Dumpable.dumpObjects(out, indent, this, mappings);
@@ -214,7 +209,7 @@ public class WebSocketMappings implements Dumpable, LifeCycle.Listener
      */
     public WebSocketNegotiator getMatchedNegotiator(String target, Consumer<PathSpec> pathSpecConsumer)
     {
-        MappedResource<WebSocketNegotiator> mapping = this.mappings.getMatch(target);
+        MatchedResource<WebSocketNegotiator> mapping = this.mappings.getMatched(target);
         if (mapping == null)
             return null;
 

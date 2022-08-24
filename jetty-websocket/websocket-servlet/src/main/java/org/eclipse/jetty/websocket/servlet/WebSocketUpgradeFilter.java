@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -134,6 +134,12 @@ public class WebSocketUpgradeFilter implements Filter, Dumpable
                     servletHandler.removeFilterMapping(mapping);
                     contextHandler.removeEventListener(this);
                 }
+
+                @Override
+                public String toString()
+                {
+                    return String.format("%sCleanupListener", WebSocketUpgradeFilter.class.getSimpleName());
+                }
             });
 
             if (LOG.isDebugEnabled())
@@ -165,15 +171,9 @@ public class WebSocketUpgradeFilter implements Filter, Dumpable
     }
 
     @Override
-    public String dump()
-    {
-        return Dumpable.dump(this);
-    }
-
-    @Override
     public void dump(Appendable out, String indent) throws IOException
     {
-        Dumpable.dumpObjects(out, indent, this, mappings);
+        Dumpable.dumpObjects(out, indent, this, defaultCustomizer, mappings);
     }
 
     @Override

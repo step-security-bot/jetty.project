@@ -20,7 +20,8 @@ This release process will produce releases:
 - [ ] Assign this issue to a "release manager".
 - [ ] Review [draft security advisories](https://github.com/eclipse/jetty.project/security/advisories). Ensure that issues are created and assigned to GitHub Projects to capture any advisories that will be announced.
 - [ ] Create the [GitHub Project(s)](https://github.com/eclipse/jetty.project/projects) for the next releases.
-- [ ] Review the issues/PRs assigned to the target [pGitHub Project(s)](https://github.com/eclipse/jetty.project/projects).  Any PRs that are moved to next releases should be commented on so their authors are informed.
+- [ ] Review dependabot status. If there has not been a recent run, run [manually](https://github.com/eclipse/jetty.project/network/updates) and review resulting PRs for inclusion.
+- [ ] Review the issues/PRs assigned to the target [GitHub Project(s)](https://github.com/eclipse/jetty.project/projects).  Any PRs that are moved to next releases should be commented on so their authors are informed.
 - [ ] Freeze the target [GitHub Project(s)](https://github.com/eclipse/jetty.project/projects) by editing their names to "Jetty X.Y.Z FROZEN"
 - [ ] Wait 24 hours from last change to the issues/PRs included in FROZEN GitHub Project(s).
 - [ ] Verify target [project(s)](https://github.com/eclipse/jetty.project/projects) are complete.
@@ -53,6 +54,7 @@ This release process will produce releases:
 - [ ] Prepare release announcement for mailing lists.
 - [ ] Publish any [security advisories](https://github.com/eclipse/jetty.project/security/advisories).
   + [ ] Edit `VERSION.txt` to include any actual CVE number next to correspondent issue.
+  + [ ] Edit any issues for CVEs in github with their CVE number
 - [ ] Notify downstream maintainers.
   + [ ] Eclipse p2 maintainer.
   + [ ] Docker maintainer.

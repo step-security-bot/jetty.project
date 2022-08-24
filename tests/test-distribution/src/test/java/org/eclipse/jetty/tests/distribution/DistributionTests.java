@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -15,6 +15,7 @@ package org.eclipse.jetty.tests.distribution;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,6 +25,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -31,10 +33,16 @@ import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.dynamic.HttpClientTransportDynamic;
 import org.eclipse.jetty.client.http.HttpClientTransportOverHTTP;
+import org.eclipse.jetty.http.HttpScheme;
 import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.http2.client.HTTP2Client;
 import org.eclipse.jetty.http2.client.http.HttpClientTransportOverHTTP2;
+import org.eclipse.jetty.http3.client.HTTP3Client;
+import org.eclipse.jetty.http3.client.http.HttpClientTransportOverHTTP3;
 import org.eclipse.jetty.io.ClientConnector;
+import org.eclipse.jetty.start.FS;
+import org.eclipse.jetty.tests.distribution.openid.OpenIdProvider;
+import org.eclipse.jetty.toolchain.test.PathAssert;
 import org.eclipse.jetty.unixsocket.client.HttpClientTransportOverUnixSockets;
 import org.eclipse.jetty.unixsocket.server.UnixSocketConnector;
 import org.eclipse.jetty.util.BlockingArrayQueue;
@@ -962,6 +970,263 @@ public class DistributionTests extends AbstractJettyHomeTest
                 assertTrue(run2.getLogs().stream()
                     .anyMatch(log -> log.contains("WARN") && log.contains("Forking")));
             }
+        }
+    }
+
+    @Test
+    public void testIniSectionPropertyOverriddenByCommandLine() throws Exception
+    {
+        String jettyVersion = System.getProperty("jettyVersion");
+        JettyHomeTester distribution = JettyHomeTester.Builder.newInstance()
+            .jettyVersion(jettyVersion)
+            .mavenLocalRepository(System.getProperty("mavenRepoPath"))
+            .build();
+
+        Path jettyBase = distribution.getJettyBase();
+        Path jettyBaseModules = jettyBase.resolve("modules");
+        Files.createDirectories(jettyBaseModules);
+        String pathProperty = "jetty.sslContext.keyStorePath";
+        // Create module with an [ini] section with an invalid password,
+        // which should be overridden on the command line at startup.
+        String module = "" +
+            "[depends]\n" +
+            "ssl\n" +
+            "\n" +
+            "[ini]\n" +
+            "" + pathProperty + "=modbased\n";
+        String moduleName = "ssl-ini";
+        Files.write(jettyBaseModules.resolve(moduleName + ".mod"), module.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
+
+        try (JettyHomeTester.Run run1 = distribution.start("--add-module=https,test-keystore,ssl-ini"))
+        {
+            assertTrue(run1.awaitFor(5, TimeUnit.SECONDS));
+            assertEquals(0, run1.getExitValue());
+
+            // Override the property on the command line with the correct password.
+            try (JettyHomeTester.Run run2 = distribution.start(pathProperty + "=cmdline"))
+            {
+                assertTrue(run2.awaitConsoleLogsFor("Started Server@", 5, TimeUnit.SECONDS));
+                PathAssert.assertFileExists("${jetty.base}/cmdline", jettyBase.resolve("cmdline"));
+                PathAssert.assertNotPathExists("${jetty.base}/modbased", jettyBase.resolve("modbased"));
+            }
+        }
+    }
+
+    @Test
+    public void testWellKnownModule() throws Exception
+    {
+        String jettyVersion = System.getProperty("jettyVersion");
+        JettyHomeTester distribution = JettyHomeTester.Builder.newInstance()
+            .jettyVersion(jettyVersion)
+            .mavenLocalRepository(System.getProperty("mavenRepoPath"))
+            .build();
+        String[] args1 = {
+            "--approve-all-licenses",
+            "--add-modules=http,well-known"
+        };
+        try (JettyHomeTester.Run run1 = distribution.start(args1))
+        {
+            assertTrue(run1.awaitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, run1.getExitValue());
+
+            // Ensure .well-known directory exists.
+            Path wellKnown = distribution.getJettyBase().resolve(".well-known");
+            assertTrue(FS.exists(wellKnown));
+
+            // Write content to a file in the .well-known directory.
+            String testFileContent = "hello world " + UUID.randomUUID();
+            File testFile = wellKnown.resolve("testFile").toFile();
+            assertTrue(testFile.createNewFile());
+            testFile.deleteOnExit();
+            FileWriter fileWriter = new FileWriter(testFile);
+            fileWriter.write(testFileContent);
+            fileWriter.close();
+
+            int port = distribution.freePort();
+            String[] args2 = {
+                "jetty.http.port=" + port
+                //"jetty.server.dumpAfterStart=true"
+            };
+
+            try (JettyHomeTester.Run run2 = distribution.start(args2))
+            {
+                assertTrue(run2.awaitConsoleLogsFor("Started Server@", 10, TimeUnit.SECONDS));
+
+                // Test we can access the file in the .well-known directory.
+                startHttpClient();
+                ContentResponse response = client.GET("http://localhost:" + port + "/.well-known/testFile");
+                assertThat(response.getStatus(), is(HttpStatus.OK_200));
+                assertThat(response.getContentAsString(), is(testFileContent));
+            }
+        }
+    }
+
+    @Test
+    public void testDeprecatedModule() throws Exception
+    {
+        String jettyVersion = System.getProperty("jettyVersion");
+        JettyHomeTester distribution = JettyHomeTester.Builder.newInstance()
+            .jettyVersion(jettyVersion)
+            .mavenLocalRepository(System.getProperty("mavenRepoPath"))
+            .build();
+
+        Path jettyBase = distribution.getJettyBase();
+        Path jettyBaseModules = jettyBase.resolve("modules");
+        Files.createDirectories(jettyBaseModules);
+        Path deprecatedModule = jettyBaseModules.resolve("deprecated.mod");
+        String description = "A deprecated module.";
+        String reason = "This module is deprecated.";
+        List<String> lines = List.of(
+            "[description]",
+            description,
+            "[deprecated]",
+            reason,
+            "[tags]",
+            "deprecated"
+        );
+        Files.write(deprecatedModule, lines, StandardOpenOption.CREATE);
+
+        try (JettyHomeTester.Run listConfigRun = distribution.start(List.of("--list-modules=deprecated")))
+        {
+            assertTrue(listConfigRun.awaitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, listConfigRun.getExitValue());
+
+            assertTrue(listConfigRun.getLogs().stream().anyMatch(log -> log.contains(description)));
+        }
+
+        try (JettyHomeTester.Run run1 = distribution.start(List.of("--add-modules=http,deprecated")))
+        {
+            assertTrue(run1.awaitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, run1.getExitValue());
+
+            assertTrue(run1.getLogs().stream().anyMatch(log -> log.contains("WARN") && log.contains(reason)));
+
+            int port = distribution.freePort();
+            try (JettyHomeTester.Run run2 = distribution.start("jetty.http.port=" + port))
+            {
+                assertTrue(run2.awaitConsoleLogsFor("Started Server@", 10, TimeUnit.SECONDS));
+                assertTrue(run2.getLogs().stream()
+                    .anyMatch(log -> log.contains("WARN") && log.contains(reason)));
+            }
+        }
+    }
+
+    @Test
+    public void testH3() throws Exception
+    {
+        String jettyVersion = System.getProperty("jettyVersion");
+        JettyHomeTester distribution = JettyHomeTester.Builder.newInstance()
+            .jettyVersion(jettyVersion)
+            .mavenLocalRepository(System.getProperty("mavenRepoPath"))
+            .build();
+
+        try (JettyHomeTester.Run run1 = distribution.start("--approve-all-licenses", "--add-modules=http3,test-keystore"))
+        {
+            assertTrue(run1.awaitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, run1.getExitValue());
+
+            int h2Port = distribution.freePort();
+            int h3Port = distribution.freePort();
+            try (JettyHomeTester.Run run2 = distribution.start(List.of("jetty.ssl.selectors=1", "jetty.ssl.port=" + h2Port, "jetty.quic.port=" + h3Port)))
+            {
+                assertTrue(run2.awaitConsoleLogsFor("Started Server@", 10, TimeUnit.SECONDS));
+
+                HTTP3Client http3Client = new HTTP3Client();
+                http3Client.getQuicConfiguration().setVerifyPeerCertificates(false);
+                this.client = new HttpClient(new HttpClientTransportOverHTTP3(http3Client));
+                this.client.start();
+                ContentResponse response = this.client.newRequest("localhost", h3Port)
+                    .scheme(HttpScheme.HTTPS.asString())
+                    .path("/path")
+                    .timeout(15, TimeUnit.SECONDS)
+                    .send();
+                assertEquals(HttpStatus.NOT_FOUND_404, response.getStatus());
+            }
+        }
+    }
+
+    @Test
+    public void testOpenID() throws Exception
+    {
+        Path jettyBase = newTestJettyBaseDirectory();
+        String jettyVersion = System.getProperty("jettyVersion");
+        JettyHomeTester distribution = JettyHomeTester.Builder.newInstance()
+            .jettyVersion(jettyVersion)
+            .jettyBase(jettyBase)
+            .mavenLocalRepository(System.getProperty("mavenRepoPath"))
+            .build();
+
+        String[] args1 = {
+            "--create-startd",
+            "--approve-all-licenses",
+            "--add-to-start=http,webapp,deploy,openid"
+        };
+
+        String clientId = "clientId123";
+        String clientSecret = "clientSecret456";
+        OpenIdProvider openIdProvider = new OpenIdProvider(clientId, clientSecret);
+        try (JettyHomeTester.Run run1 = distribution.start(args1))
+        {
+            assertTrue(run1.awaitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, run1.getExitValue());
+
+            File webApp = distribution.resolveArtifact("org.eclipse.jetty.tests:test-openid-webapp:war:" + jettyVersion);
+            distribution.installWarFile(webApp, "test");
+
+            int port = distribution.freePort();
+            openIdProvider.addRedirectUri("http://localhost:" + port + "/test/j_security_check");
+            openIdProvider.start();
+            String[] args2 = {
+                "jetty.http.port=" + port,
+                "jetty.ssl.port=" + port,
+                "jetty.openid.provider=" + openIdProvider.getProvider(),
+                "jetty.openid.clientId=" + clientId,
+                "jetty.openid.clientSecret=" + clientSecret,
+                //"jetty.server.dumpAfterStart=true",
+            };
+
+            try (JettyHomeTester.Run run2 = distribution.start(args2))
+            {
+                assertTrue(run2.awaitConsoleLogsFor("Started Server@", 10, TimeUnit.SECONDS));
+                startHttpClient(false);
+                String uri = "http://localhost:" + port + "/test";
+                openIdProvider.setUser(new OpenIdProvider.User("123456789", "Alice"));
+
+                // Initially not authenticated
+                ContentResponse response = client.GET(uri + "/");
+                assertThat(response.getStatus(), is(HttpStatus.OK_200));
+                String content = response.getContentAsString();
+                assertThat(content, containsString("not authenticated"));
+
+                // Request to login is success
+                response = client.GET(uri + "/login");
+                assertThat(response.getStatus(), is(HttpStatus.OK_200));
+                content = response.getContentAsString();
+                assertThat(content, containsString("success"));
+
+                // Now authenticated we can get info
+                response = client.GET(uri + "/");
+                assertThat(response.getStatus(), is(HttpStatus.OK_200));
+                content = response.getContentAsString();
+                assertThat(content, containsString("userId: 123456789"));
+                assertThat(content, containsString("name: Alice"));
+                assertThat(content, containsString("email: Alice@example.com"));
+
+                // Request to admin page gives 403 as we do not have admin role
+                response = client.GET(uri + "/admin");
+                assertThat(response.getStatus(), is(HttpStatus.FORBIDDEN_403));
+
+                // We are no longer authenticated after logging out
+                response = client.GET(uri + "/logout");
+                assertThat(response.getStatus(), is(HttpStatus.OK_200));
+                content = response.getContentAsString();
+                assertThat(content, containsString("not authenticated"));
+
+            }
+        }
+        finally
+        {
+            openIdProvider.stop();
         }
     }
 }

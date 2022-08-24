@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -365,16 +365,31 @@ public class JettyWebSocketFrameHandler implements FrameHandler
             {
                 throw new WebSocketException(endpointInstance.getClass().getSimpleName() + " PING method error: " + cause.getMessage(), cause);
             }
+
+            callback.succeeded();
+            demand();
         }
         else
         {
-            // Automatically respond
-            ByteBuffer payload = BufferUtil.copy(frame.getPayload());
-            getSession().getRemote().sendPong(payload, WriteCallback.NOOP);
-        }
+            // Automatically respond.
+            getSession().getRemote().sendPong(frame.getPayload(), new WriteCallback()
+            {
+                @Override
+                public void writeSuccess()
+                {
+                    callback.succeeded();
+                    demand();
+                }
 
-        callback.succeeded();
-        demand();
+                @Override
+                public void writeFailed(Throwable x)
+                {
+                    // Ignore failures, we might be output closed and receive ping.
+                    callback.succeeded();
+                    demand();
+                }
+            });
+        }
     }
 
     private void onPongFrame(Frame frame, Callback callback)

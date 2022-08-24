@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -19,6 +19,8 @@ import java.util.concurrent.locks.Condition;
 
 import org.eclipse.jetty.http.BadMessageException;
 import org.eclipse.jetty.http.HttpStatus;
+import org.eclipse.jetty.util.StaticException;
+import org.eclipse.jetty.util.component.Destroyable;
 import org.eclipse.jetty.util.thread.AutoLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,14 +32,8 @@ import org.slf4j.LoggerFactory;
 class AsyncContentProducer implements ContentProducer
 {
     private static final Logger LOG = LoggerFactory.getLogger(AsyncContentProducer.class);
-    private static final Throwable UNCONSUMED_CONTENT_EXCEPTION = new IOException("Unconsumed content")
-    {
-        @Override
-        public Throwable fillInStackTrace()
-        {
-            return this;
-        }
-    };
+    private static final HttpInput.ErrorContent RECYCLED_ERROR_CONTENT = new HttpInput.ErrorContent(new StaticException("ContentProducer has been recycled"));
+    private static final Throwable UNCONSUMED_CONTENT_EXCEPTION = new StaticException("Unconsumed content");
 
     private final AutoLock _lock = new AutoLock();
     private final HttpChannel _httpChannel;
@@ -65,7 +61,30 @@ class AsyncContentProducer implements ContentProducer
         assertLocked();
         if (LOG.isDebugEnabled())
             LOG.debug("recycling {}", this);
+
+        // Make sure that the content has been fully consumed before destroying the interceptor and also make sure
+        // that asking this instance for content between recycle and reopen will only produce error'ed content.
+        if (_rawContent == null)
+            _rawContent = RECYCLED_ERROR_CONTENT;
+        else if (!_rawContent.isSpecial())
+            throw new IllegalStateException("ContentProducer with unconsumed content cannot be recycled");
+
+        if (_transformedContent == null)
+            _transformedContent = RECYCLED_ERROR_CONTENT;
+        else if (!_transformedContent.isSpecial())
+            throw new IllegalStateException("ContentProducer with unconsumed content cannot be recycled");
+
+        if (_interceptor instanceof Destroyable)
+            ((Destroyable)_interceptor).destroy();
         _interceptor = null;
+    }
+
+    @Override
+    public void reopen()
+    {
+        assertLocked();
+        if (LOG.isDebugEnabled())
+            LOG.debug("reopening {}", this);
         _rawContent = null;
         _transformedContent = null;
         _error = false;
@@ -163,10 +182,10 @@ class AsyncContentProducer implements ContentProducer
     {
         assertLocked();
         Throwable x = UNCONSUMED_CONTENT_EXCEPTION;
-        if (LOG.isDebugEnabled())
+        if (LOG.isTraceEnabled())
         {
-            x = new IOException("Unconsumed content");
-            LOG.debug("consumeAll {}", this, x);
+            x = new StaticException("Unconsumed content", true);
+            LOG.trace("consumeAll {}", this, x);
         }
         failCurrentContent(x);
         // A specific HttpChannel mechanism must be used as the following code
@@ -287,124 +306,180 @@ class AsyncContentProducer implements ContentProducer
         return false;
     }
 
+    boolean isUnready()
+    {
+        return _httpChannel.getState().isInputUnready();
+    }
+
     private HttpInput.Content nextTransformedContent()
     {
         if (LOG.isDebugEnabled())
             LOG.debug("nextTransformedContent {}", this);
-        if (_rawContent == null)
-        {
-            _rawContent = produceRawContent();
-            if (_rawContent == null)
-                return null;
-        }
 
-        if (_transformedContent != null && _transformedContent.isEmpty())
+        while (true)
         {
-            if (_transformedContent != _rawContent)
-                _transformedContent.succeeded();
-            if (LOG.isDebugEnabled())
-                LOG.debug("nulling depleted transformed content {}", this);
-            _transformedContent = null;
-        }
-
-        while (_transformedContent == null)
-        {
-            if (_rawContent.isSpecial())
+            if (_transformedContent != null)
             {
-                // TODO does EOF need to be passed to the interceptors?
-
-                // In case the _rawContent was set by consumeAll(), check the httpChannel
-                // to see if it has a more precise error. Otherwise, the exact same
-                // special content will be returned by the httpChannel; do not do that
-                // if the _error flag was set, meaning the current error is definitive.
-                if (!_error)
+                if (_transformedContent.isSpecial() || !_transformedContent.isEmpty())
                 {
-                    HttpInput.Content refreshedRawContent = produceRawContent();
-                    if (refreshedRawContent != null)
-                        _rawContent = refreshedRawContent;
-                    _error = _rawContent.getError() != null;
-                }
-
-                if (LOG.isDebugEnabled())
-                    LOG.debug("raw content is special (with error = {}), returning it {}", _error, this);
-                return _rawContent;
-            }
-
-            if (_interceptor != null)
-            {
-                if (LOG.isDebugEnabled())
-                    LOG.debug("using interceptor to transform raw content {}", this);
-                _transformedContent = intercept();
-                if (_error)
-                    return _rawContent;
-            }
-            else
-            {
-                if (LOG.isDebugEnabled())
-                    LOG.debug("null interceptor, transformed content = raw content {}", this);
-                _transformedContent = _rawContent;
-            }
-
-            if (_transformedContent != null && _transformedContent.isEmpty())
-            {
-                if (_transformedContent != _rawContent)
-                    _transformedContent.succeeded();
-                if (LOG.isDebugEnabled())
-                    LOG.debug("nulling depleted transformed content {}", this);
-                _transformedContent = null;
-            }
-
-            if (_transformedContent == null)
-            {
-                if (_rawContent.isEmpty())
-                {
-                    _rawContent.succeeded();
-                    _rawContent = null;
-                    if (LOG.isDebugEnabled())
-                        LOG.debug("nulling depleted raw content {}", this);
-                    _rawContent = produceRawContent();
-                    if (_rawContent == null)
+                    if (_transformedContent.getError() != null && !_error)
                     {
+                        // In case the _rawContent was set by consumeAll(), check the httpChannel
+                        // to see if it has a more precise error. Otherwise, the exact same
+                        // special content will be returned by the httpChannel; do not do that
+                        // if the _error flag was set, meaning the current error is definitive.
+                        HttpInput.Content refreshedRawContent = produceRawContent();
+                        if (refreshedRawContent != null)
+                            _rawContent = _transformedContent = refreshedRawContent;
+                        _error = _rawContent.getError() != null;
                         if (LOG.isDebugEnabled())
-                            LOG.debug("produced null raw content, returning null, {}", this);
-                        return null;
+                            LOG.debug("refreshed raw content: {} {}", _rawContent, this);
                     }
+
+                    if (LOG.isDebugEnabled())
+                        LOG.debug("transformed content not yet depleted, returning it {}", this);
+                    return _transformedContent;
                 }
                 else
                 {
                     if (LOG.isDebugEnabled())
-                        LOG.debug("raw content is not empty {}", this);
+                        LOG.debug("current transformed content depleted {}", this);
+                    _transformedContent.succeeded();
+                    _transformedContent = null;
                 }
             }
-            else
+
+            if (_rawContent == null)
             {
                 if (LOG.isDebugEnabled())
-                    LOG.debug("transformed content is not empty {}", this);
+                    LOG.debug("producing new raw content {}", this);
+                _rawContent = produceRawContent();
+                if (_rawContent == null)
+                {
+                    if (LOG.isDebugEnabled())
+                        LOG.debug("channel has no new raw content {}", this);
+                    return null;
+                }
+            }
+
+            if (LOG.isDebugEnabled())
+                LOG.debug("transforming raw content {}", this);
+            transformRawContent();
+        }
+    }
+
+    private void transformRawContent()
+    {
+        if (_interceptor != null)
+        {
+            if (LOG.isDebugEnabled())
+                LOG.debug("intercepting raw content {}", this);
+            _transformedContent = intercept();
+
+            // If the interceptor generated a special content, _rawContent must become that special content.
+            if (_transformedContent != null && _transformedContent.isSpecial() && _transformedContent != _rawContent)
+            {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("interceptor generated a special content, _rawContent must become that special content {}", this);
+                _rawContent.succeeded();
+                _rawContent = _transformedContent;
+                return;
+            }
+
+            // If the interceptor generated a null content, recycle the raw content now if it is empty.
+            if (_transformedContent == null && _rawContent.isEmpty() && !_rawContent.isSpecial())
+            {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("interceptor generated a null content, recycling the empty raw content now {}", this);
+                _rawContent.succeeded();
+                _rawContent = null;
+                return;
+            }
+
+            // If the interceptor returned the raw content, recycle the raw content now if it is empty.
+            if (_transformedContent == _rawContent && _rawContent.isEmpty() && !_rawContent.isSpecial())
+            {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("interceptor returned the raw content, recycle the empty raw content now {}", this);
+                _rawContent.succeeded();
+                _rawContent = _transformedContent = null;
             }
         }
+        else
+        {
+            // Recycle the raw content now if it is empty.
+            if (_rawContent.isEmpty() && !_rawContent.isSpecial())
+            {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("recycling the empty raw content now {}", this);
+                _rawContent.succeeded();
+                _rawContent = null;
+            }
 
-        if (LOG.isDebugEnabled())
-            LOG.debug("returning transformed content {}", this);
-        return _transformedContent;
+            if (LOG.isDebugEnabled())
+                LOG.debug("no interceptor, transformed content is raw content {}", this);
+            _transformedContent = _rawContent;
+        }
     }
 
     private HttpInput.Content intercept()
     {
         try
         {
-            return _interceptor.readFrom(_rawContent);
+            int remainingBeforeInterception = _rawContent.remaining();
+            HttpInput.Content content = _interceptor.readFrom(_rawContent);
+            if (content != null && content.isSpecial() && !_rawContent.isSpecial())
+            {
+                Throwable error = content.getError();
+                if (error != null)
+                {
+                    // Set the _error flag to mark the content as definitive, i.e.:
+                    // do not try to produce new raw content to get a fresher error
+                    // when the special content was generated by the interceptor.
+                    _error = true;
+                    if (_httpChannel.getResponse().isCommitted())
+                        _httpChannel.abort(error);
+                }
+                if (LOG.isDebugEnabled())
+                    LOG.debug("interceptor generated special content {}", this);
+            }
+            else if (content != _rawContent && !_rawContent.isSpecial() && !_rawContent.isEmpty() && _rawContent.remaining() == remainingBeforeInterception)
+            {
+                IOException failure = new IOException("Interceptor " + _interceptor + " did not consume any of the " + _rawContent.remaining() + " remaining byte(s) of content");
+                if (content != null)
+                    content.failed(failure);
+                failCurrentContent(failure);
+                // Set the _error flag to mark the content as definitive, i.e.:
+                // do not try to produce new raw content to get a fresher error
+                // when the special content was caused by the interceptor not
+                // consuming the raw content.
+                _error = true;
+                Response response = _httpChannel.getResponse();
+                if (response.isCommitted())
+                    _httpChannel.abort(failure);
+                if (LOG.isDebugEnabled())
+                    LOG.debug("interceptor did not consume content {}", this);
+                content = _transformedContent;
+            }
+
+            if (LOG.isDebugEnabled())
+                LOG.debug("intercepted raw content {}", this);
+            return content;
         }
         catch (Throwable x)
         {
             IOException failure = new IOException("Bad content", x);
             failCurrentContent(failure);
-            // Set the _error flag to mark the error as definitive, i.e.:
-            // do not try to produce new raw content to get a fresher error.
+            // Set the _error flag to mark the content as definitive, i.e.:
+            // do not try to produce new raw content to get a fresher error
+            // when the special content was caused by the interceptor throwing.
             _error = true;
             Response response = _httpChannel.getResponse();
             if (response.isCommitted())
                 _httpChannel.abort(failure);
-            return null;
+            if (LOG.isDebugEnabled())
+                LOG.debug("interceptor threw exception {}", this, x);
+            return _transformedContent;
         }
     }
 

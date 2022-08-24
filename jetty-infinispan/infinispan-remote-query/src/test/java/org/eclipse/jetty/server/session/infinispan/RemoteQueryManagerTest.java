@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -42,6 +42,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy;
@@ -74,10 +75,12 @@ public class RemoteQueryManagerTest
             .withEnv("PASS", "foobar")
             .withEnv("MGMT_USER", "admin")
             .withEnv("MGMT_PASS", "admin")
+            .withEnv("CONFIG_PATH", "/user-config/config.yaml")
             .waitingFor(new LogMessageWaitStrategy()
                 .withRegEx(".*Infinispan Server.*started in.*\\s"))
             .withExposedPorts(4712, 4713, 8088, 8089, 8443, 9990, 9993, 11211, 11222, 11223, 11224)
-            .withLogConsumer(new Slf4jLogConsumer(INFINISPAN_LOG));
+            .withLogConsumer(new Slf4jLogConsumer(INFINISPAN_LOG))
+            .withClasspathResourceMapping("/config.yaml", "/user-config/config.yaml", BindMode.READ_ONLY);
 
     @BeforeEach
     public void setup() throws Exception

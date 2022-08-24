@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -37,10 +37,10 @@ public class RetainableByteBuffer implements Retainable
 {
     private final ByteBuffer buffer;
     private final AtomicInteger references = new AtomicInteger();
-    private final Consumer<ByteBuffer> releaser;
+    private final Consumer<RetainableByteBuffer> releaser;
     private final AtomicLong lastUpdate = new AtomicLong(System.nanoTime());
 
-    RetainableByteBuffer(ByteBuffer buffer, Consumer<ByteBuffer> releaser)
+    RetainableByteBuffer(ByteBuffer buffer, Consumer<RetainableByteBuffer> releaser)
     {
         this.releaser = releaser;
         this.buffer = buffer;
@@ -112,7 +112,7 @@ public class RetainableByteBuffer implements Retainable
         if (ref == 0)
         {
             lastUpdate.setOpaque(System.nanoTime());
-            releaser.accept(buffer);
+            releaser.accept(this);
             return true;
         }
         return false;

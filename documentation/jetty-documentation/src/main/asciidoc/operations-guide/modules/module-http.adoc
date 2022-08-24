@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -60,7 +60,7 @@ A single NIO selector can manage thousands of connections, with the assumption t
 
 For a single NIO selector, the ratio between the average number of selected connections over the total number of connections for every `select()` call depends heavily on the protocol but also on the application.
 
-Multiplexed protocols such as HTTP/2 tend to be busier than duplex protocols such as HTTP/1.1, leading to a higher ratio.
+Multiplexed TCP protocols such as HTTP/2 tend to be busier than duplex protocols such as HTTP/1.1, leading to a higher ratio.
 
 REST applications that exchange many little JSON messages tend to be busier than file server applications, leading to a higher ratio.
 

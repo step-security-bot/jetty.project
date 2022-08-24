@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -152,6 +152,11 @@ public class Module implements Comparable<Module>
      * Dependencies from {@code [depends]} section
      */
     private final List<String> _depends = new ArrayList<>();
+
+    /**
+     * Text from {@code [deprecated]} section
+     */
+    private final List<String> _deprecated = new ArrayList<>();
 
     /**
      * Module names from {@code [before]} section
@@ -398,6 +403,9 @@ public class Module implements Comparable<Module>
                                 if (!_depends.contains(line))
                                     _depends.add(line);
                                 break;
+                            case "DEPRECATED":
+                                _deprecated.add(line);
+                                break;
                             case "FILE":
                             case "FILES":
                                 _files.add(line);
@@ -408,8 +416,30 @@ public class Module implements Comparable<Module>
                                 break;
                             case "DEFAULTS": // old name introduced in 9.2.x
                             case "INI": // new name for 9.3+
-                                _defaultConfig.add(line);
+                            {
+                                // If a property is specified as `<k>=<v>` it is to be treated as `<k>?=<v>`.
+                                // All other property usages are left as-is (eg: `<k>+=<v>`)
+                                int idx = line.indexOf('=');
+                                if (idx > 0)
+                                {
+                                    String key = line.substring(0, idx);
+                                    String value = line.substring(idx + 1);
+                                    if (key.endsWith("?") || key.endsWith("+"))
+                                    {
+                                        // already the correct way
+                                        _defaultConfig.add(line);
+                                    }
+                                    else
+                                    {
+                                        _defaultConfig.add(String.format("%s?=%s", key, value));
+                                    }
+                                }
+                                else
+                                {
+                                    _defaultConfig.add(line);
+                                }
                                 break;
+                            }
                             case "INI-TEMPLATE":
                                 _iniTemplate.add(line);
                                 break;
@@ -514,6 +544,11 @@ public class Module implements Comparable<Module>
     public List<String> getDepends()
     {
         return new ArrayList<>(_depends);
+    }
+
+    public List<String> getDeprecated()
+    {
+        return List.copyOf(_deprecated);
     }
 
     public Set<String> getProvides()

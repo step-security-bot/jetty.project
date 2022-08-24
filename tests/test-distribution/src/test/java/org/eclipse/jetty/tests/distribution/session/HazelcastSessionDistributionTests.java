@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,13 +31,10 @@ import java.util.concurrent.TimeUnit;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.jetty.tests.distribution.JettyHomeTester;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
@@ -53,24 +51,20 @@ public class HazelcastSessionDistributionTests extends AbstractSessionDistributi
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastSessionDistributionTests.class);
 
-    private GenericContainer<?> hazelcast;
+    private GenericContainer<?> hazelcast = new GenericContainer<>("hazelcast/hazelcast:" + System.getProperty("hazelcast.version", "4.2.2"))
+            .withExposedPorts(5701)
+            .waitingFor(Wait.forLogMessage(".*is STARTED.*", 1))
+            .withLogConsumer(new Slf4jLogConsumer(HAZELCAST_LOG));
 
     private Path hazelcastJettyPath;
-
-    @BeforeEach
-    public void setupHazelcast()
-    {
-        hazelcast = new GenericContainer<>("hazelcast/hazelcast:" + System.getProperty("hazelcast.version", "4.1"))
-            .withExposedPorts(5701)
-            .waitingFor(Wait.forListeningPort())
-            .withLogConsumer(new Slf4jLogConsumer(HAZELCAST_LOG));
-    }
 
     @Override
     public void startExternalSessionStorage() throws Exception
     {
-        hazelcast.start();
-
+        if (!hazelcast.isRunning())
+        {
+            hazelcast.start();
+        }
         String hazelcastHost = hazelcast.getContainerIpAddress();
         int hazelcastPort = hazelcast.getMappedPort(5701);
 

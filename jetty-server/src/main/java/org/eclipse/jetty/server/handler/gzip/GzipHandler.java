@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -168,6 +168,7 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
     // non-static, as other GzipHandler instances may have different configurations
     private final IncludeExclude<String> _methods = new IncludeExclude<>();
     private final IncludeExclude<String> _paths = new IncludeExclude<>(PathSpecSet.class);
+    private final IncludeExclude<String> _inflatePaths = new IncludeExclude<>(PathSpecSet.class);
     private final IncludeExclude<String> _mimeTypes = new IncludeExclude<>(AsciiLowerCaseSet.class);
     private HttpField _vary = GzipHttpOutputInterceptor.VARY_ACCEPT_ENCODING;
 
@@ -194,6 +195,9 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
         _mimeTypes.exclude("application/brotli");
         _mimeTypes.exclude("application/x-xz");
         _mimeTypes.exclude("application/x-rar-compressed");
+
+        // It is possible to use SSE with GzipHandler but you will need to set _synFlush to true which will impact performance.
+        _mimeTypes.exclude("text/event-stream");
 
         if (LOG.isDebugEnabled())
             LOG.debug("{} mime types {}", this, _mimeTypes);
@@ -352,6 +356,41 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
     }
 
     /**
+     * Adds excluded Path Specs for request filtering on request inflation.
+     *
+     * <p>
+     * There are 2 syntaxes supported, Servlet <code>url-pattern</code> based, and
+     * Regex based.  This means that the initial characters on the path spec
+     * line are very strict, and determine the behavior of the path matching.
+     * <ul>
+     * <li>If the spec starts with <code>'^'</code> the spec is assumed to be
+     * a regex based path spec and will match with normal Java regex rules.</li>
+     * <li>If the spec starts with <code>'/'</code> then spec is assumed to be
+     * a Servlet url-pattern rules path spec for either an exact match
+     * or prefix based match.</li>
+     * <li>If the spec starts with <code>'*.'</code> then spec is assumed to be
+     * a Servlet url-pattern rules path spec for a suffix based match.</li>
+     * <li>All other syntaxes are unsupported</li>
+     * </ul>
+     * <p>
+     * Note: inclusion takes precedence over exclude.
+     *
+     * @param pathspecs Path specs (as per servlet spec) to exclude. If a
+     * ServletContext is available, the paths are relative to the context path,
+     * otherwise they are absolute.<br>
+     * For backward compatibility the pathspecs may be comma separated strings, but this
+     * will not be supported in future versions.
+     * @see #addIncludedInflationPaths(String...)
+     */
+    public void addExcludedInflationPaths(String... pathspecs)
+    {
+        for (String p : pathspecs)
+        {
+            _inflatePaths.exclude(StringUtil.csvSplit(p));
+        }
+    }
+
+    /**
      * Adds included HTTP Methods (eg: POST, PATCH, DELETE) for filtering.
      *
      * @param methods The HTTP methods to include in compression.
@@ -437,6 +476,38 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
         }
     }
 
+    /**
+     * Add included Path Specs for filtering on request inflation.
+     *
+     * <p>
+     * There are 2 syntaxes supported, Servlet <code>url-pattern</code> based, and
+     * Regex based.  This means that the initial characters on the path spec
+     * line are very strict, and determine the behavior of the path matching.
+     * <ul>
+     * <li>If the spec starts with <code>'^'</code> the spec is assumed to be
+     * a regex based path spec and will match with normal Java regex rules.</li>
+     * <li>If the spec starts with <code>'/'</code> then spec is assumed to be
+     * a Servlet url-pattern rules path spec for either an exact match
+     * or prefix based match.</li>
+     * <li>If the spec starts with <code>'*.'</code> then spec is assumed to be
+     * a Servlet url-pattern rules path spec for a suffix based match.</li>
+     * <li>All other syntaxes are unsupported</li>
+     * </ul>
+     * <p>
+     * Note: inclusion takes precedence over exclusion.
+     *
+     * @param pathspecs Path specs (as per servlet spec) to include. If a
+     * ServletContext is available, the paths are relative to the context path,
+     * otherwise they are absolute
+     */
+    public void addIncludedInflationPaths(String... pathspecs)
+    {
+        for (String p : pathspecs)
+        {
+            _inflatePaths.include(StringUtil.csvSplit(p));
+        }
+    }
+
     @Override
     public DeflaterPool.Entry getDeflaterEntry(Request request, long contentLength)
     {
@@ -493,6 +564,18 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
     }
 
     /**
+     * Get the current filter list of excluded Path Specs for request inflation.
+     *
+     * @return the filter list of excluded Path Specs
+     * @see #getIncludedInflationPaths()
+     */
+    public String[] getExcludedInflationPaths()
+    {
+        Set<String> excluded = _inflatePaths.getExcluded();
+        return excluded.toArray(new String[0]);
+    }
+
+    /**
      * Get the current filter list of included HTTP Methods
      *
      * @return the filter list of included HTTP methods
@@ -525,6 +608,18 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
     public String[] getIncludedPaths()
     {
         Set<String> includes = _paths.getIncluded();
+        return includes.toArray(new String[0]);
+    }
+
+    /**
+     * Get the current filter list of included Path Specs for request inflation.
+     *
+     * @return the filter list of included Path Specs
+     * @see #getExcludedInflationPaths()
+     */
+    public String[] getIncludedInflationPaths()
+    {
+        Set<String> includes = _inflatePaths.getIncluded();
         return includes.toArray(new String[0]);
     }
 
@@ -569,6 +664,12 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
     @Override
     public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException
     {
+        if (baseRequest.isHandled())
+        {
+            super.handle(target, baseRequest, request, response);
+            return;
+        }
+
         final ServletContext context = baseRequest.getServletContext();
         final String path = baseRequest.getPathInContext();
         LOG.debug("{} handle {} in {}", this, baseRequest, context);
@@ -576,18 +677,30 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
         if (!_dispatchers.contains(baseRequest.getDispatcherType()))
         {
             LOG.debug("{} excluded by dispatcherType {}", this, baseRequest.getDispatcherType());
-            _handler.handle(target, baseRequest, request, response);
+            super.handle(target, baseRequest, request, response);
             return;
         }
 
         // Handle request inflation
         HttpFields httpFields = baseRequest.getHttpFields();
-        boolean inflated = _inflateBufferSize > 0 && httpFields.contains(HttpHeader.CONTENT_ENCODING, "gzip");
+        boolean inflated = _inflateBufferSize > 0 && httpFields.contains(HttpHeader.CONTENT_ENCODING, "gzip") && isPathInflatable(path);
         if (inflated)
         {
             if (LOG.isDebugEnabled())
                 LOG.debug("{} inflate {}", this, request);
-            baseRequest.getHttpInput().addInterceptor(new GzipHttpInputInterceptor(_inflaterPool, baseRequest.getHttpChannel().getByteBufferPool(), _inflateBufferSize));
+            GzipHttpInputInterceptor gzipHttpInputInterceptor =
+                    new GzipHttpInputInterceptor(_inflaterPool, baseRequest.getHttpChannel().getByteBufferPool(),
+                            _inflateBufferSize, baseRequest.getHttpChannel().isUseInputDirectByteBuffers());
+            baseRequest.getHttpInput().addInterceptor(gzipHttpInputInterceptor);
+        }
+
+        // From here on out, the response output gzip determination is made
+
+        // Don't attempt to modify the response output if it's already committed.
+        if (response.isCommitted())
+        {
+            super.handle(target, baseRequest, request, response);
+            return;
         }
 
         // Are we already being gzipped?
@@ -666,7 +779,7 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
         if (alreadyGzipped)
         {
             LOG.debug("{} already intercepting {}", this, request);
-            _handler.handle(target, baseRequest, request, response);
+            super.handle(target, baseRequest, request, response);
             return;
         }
 
@@ -674,7 +787,7 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
         if (!_methods.test(baseRequest.getMethod()))
         {
             LOG.debug("{} excluded by method {}", this, request);
-            _handler.handle(target, baseRequest, request, response);
+            super.handle(target, baseRequest, request, response);
             return;
         }
 
@@ -683,7 +796,7 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
         if (!isPathGzipable(path))
         {
             LOG.debug("{} excluded by path {}", this, request);
-            _handler.handle(target, baseRequest, request, response);
+            super.handle(target, baseRequest, request, response);
             return;
         }
 
@@ -691,12 +804,12 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
         String mimeType = context == null ? MimeTypes.getDefaultMimeByExtension(path) : context.getMimeType(path);
         if (mimeType != null)
         {
-            mimeType = MimeTypes.getContentTypeWithoutCharset(mimeType);
+            mimeType = HttpField.valueParameters(mimeType, null);
             if (!isMimeTypeGzipable(mimeType))
             {
                 LOG.debug("{} excluded by path suffix mime type {}", this, request);
                 // handle normally without setting vary header
-                _handler.handle(target, baseRequest, request, response);
+                super.handle(target, baseRequest, request, response);
                 return;
             }
         }
@@ -706,9 +819,7 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
         {
             // install interceptor and handle
             out.setInterceptor(new GzipHttpOutputInterceptor(this, getVaryField(), baseRequest.getHttpChannel(), origInterceptor, isSyncFlush()));
-
-            if (_handler != null)
-                _handler.handle(target, baseRequest, request, response);
+            super.handle(target, baseRequest, request, response);
         }
         finally
         {
@@ -742,6 +853,20 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
             return true;
 
         return _paths.test(requestURI);
+    }
+
+    /**
+     * Test if the provided Request URI is allowed to be inflated based on the Path Specs filters.
+     *
+     * @param requestURI the request uri
+     * @return whether decompressing is allowed for the given the path.
+     */
+    protected boolean isPathInflatable(String requestURI)
+    {
+        if (requestURI == null)
+            return true;
+
+        return _inflatePaths.test(requestURI);
     }
 
     /**
@@ -791,6 +916,20 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
     {
         _paths.getExcluded().clear();
         _paths.exclude(pathspecs);
+    }
+
+    /**
+     * Set the excluded filter list of Path specs (replacing any previously set)
+     *
+     * @param pathspecs Path specs (as per servlet spec) to exclude from inflation. If a
+     * ServletContext is available, the paths are relative to the context path,
+     * otherwise they are absolute.
+     * @see #setIncludedInflatePaths(String...)
+     */
+    public void setExcludedInflatePaths(String... pathspecs)
+    {
+        _inflatePaths.getExcluded().clear();
+        _inflatePaths.exclude(pathspecs);
     }
 
     /**
@@ -853,6 +992,20 @@ public class GzipHandler extends HandlerWrapper implements GzipFactory
     {
         _paths.getIncluded().clear();
         _paths.include(pathspecs);
+    }
+
+    /**
+     * Set the included filter list of Path specs (replacing any previously set)
+     *
+     * @param pathspecs Path specs (as per servlet spec) to include for inflation. If a
+     * ServletContext is available, the paths are relative to the context path,
+     * otherwise they are absolute
+     * @see #setExcludedInflatePaths(String...)
+     */
+    public void setIncludedInflatePaths(String... pathspecs)
+    {
+        _inflatePaths.getIncluded().clear();
+        _inflatePaths.include(pathspecs);
     }
 
     /**

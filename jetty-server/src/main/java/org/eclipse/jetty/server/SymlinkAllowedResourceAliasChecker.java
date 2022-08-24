@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.eclipse.jetty.server.handler.ContextHandler;
+import org.eclipse.jetty.util.resource.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,9 +38,17 @@ public class SymlinkAllowedResourceAliasChecker extends AllowedResourceAliasChec
         super(contextHandler);
     }
 
+    public SymlinkAllowedResourceAliasChecker(ContextHandler contextHandler, Resource baseResource)
+    {
+        super(contextHandler, baseResource);
+    }
+
     @Override
     protected boolean check(String pathInContext, Path path)
     {
+        if (_base == null)
+            return false;
+
         // do not allow any file separation characters in the URI, as we need to know exactly what are the segments
         if (File.separatorChar != '/' && pathInContext.indexOf(File.separatorChar) >= 0)
             return false;

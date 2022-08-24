@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -1535,8 +1535,18 @@ public class HttpClientTest extends AbstractHttpClientServerTest
 
                 ContentResponse response = listener.get(5, TimeUnit.SECONDS);
                 assertEquals(200, response.getStatus());
+                assertThat(connection, Matchers.instanceOf(HttpConnectionOverHTTP.class));
+                HttpConnectionOverHTTP httpConnection = (HttpConnectionOverHTTP)connection;
+                EndPoint endPoint = httpConnection.getEndPoint();
+                assertTrue(endPoint.isOpen());
 
-                // Test that I can send another request on the same connection.
+                // After a CONNECT+200, this connection is in "tunnel mode",
+                // and applications that want to deal with tunnel bytes must
+                // likely access the underlying EndPoint.
+                // For the purpose of this test, we just re-enable fill interest
+                // so that we can send another clear-text HTTP request.
+                httpConnection.fillInterested();
+
                 request = client.newRequest(host, port);
                 listener = new FutureResponseListener(request);
                 connection.send(request, listener);
@@ -1608,6 +1618,7 @@ public class HttpClientTest extends AbstractHttpClientServerTest
             .timeout(123231, TimeUnit.SECONDS)
             .idleTimeout(232342, TimeUnit.SECONDS)
             .followRedirects(false)
+            .tag("tag")
             .headers(headers -> headers.put(HttpHeader.ACCEPT, "application/json"))
             .headers(headers -> headers.put("X-Some-Other-Custom-Header", "some-other-value")));
 
@@ -1959,6 +1970,7 @@ public class HttpClientTest extends AbstractHttpClientServerTest
         assertEquals(original.getIdleTimeout(), copy.getIdleTimeout());
         assertEquals(original.getTimeout(), copy.getTimeout());
         assertEquals(original.isFollowRedirects(), copy.isFollowRedirects());
+        assertEquals(original.getTag(), copy.getTag());
         assertEquals(original.getHeaders(), copy.getHeaders());
     }
 

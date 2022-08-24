@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -195,9 +195,12 @@ public class BaseBuilder
                     }
                 };
                 List<Path> paths = new ArrayList<>();
-                for (Path path : Files.newDirectoryStream(startd, filter))
+                try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(startd, filter))
                 {
-                    paths.add(path);
+                    for (Path path : dirStream)
+                    {
+                        paths.add(path);
+                    }
                 }
                 paths.sort(new NaturalSort.Paths());
 

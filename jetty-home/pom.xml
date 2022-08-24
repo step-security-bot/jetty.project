@@ -3,7 +3,7 @@
   <parent>
     <artifactId>jetty-project</artifactId>
     <groupId>org.eclipse.jetty</groupId>
-    <version>10.0.7-SNAPSHOT</version>
+    <version>10.0.12-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <artifactId>jetty-home</artifactId>
@@ -130,7 +130,7 @@
             <configuration>
               <includeGroupIds>jakarta.transaction,org.eclipse.jetty</includeGroupIds>
               <excludeGroupIds>
-                org.eclipse.jetty.orbit,org.eclipse.jetty.http2,org.eclipse.jetty.websocket,org.eclipse.jetty.fcgi,org.eclipse.jetty.toolchain,org.apache.taglibs
+                org.eclipse.jetty.demo,org.eclipse.jetty.orbit,org.eclipse.jetty.http2,org.eclipse.jetty.http3,org.eclipse.jetty.quic,org.eclipse.jetty.websocket,org.eclipse.jetty.fcgi,org.eclipse.jetty.toolchain,org.apache.taglibs
               </excludeGroupIds>
               <excludeArtifactIds>
                 apache-jsp,apache-jstl,jetty-start,jetty-slf4j-impl
@@ -148,7 +148,7 @@
             <configuration>
               <includeGroupIds>jakarta.transaction,org.eclipse.jetty</includeGroupIds>
               <excludeGroupIds>
-                org.eclipse.jetty.orbit,org.eclipse.jetty.http2,org.eclipse.jetty.websocket,org.eclipse.jetty.fcgi,org.eclipse.jetty.toolchain,org.apache.taglibs
+                org.eclipse.jetty.orbit,org.eclipse.jetty.http2,org.eclipse.jetty.http3,org.eclipse.jetty.quic,org.eclipse.jetty.websocket,org.eclipse.jetty.fcgi,org.eclipse.jetty.toolchain,org.apache.taglibs
               </excludeGroupIds>
               <excludeArtifactIds>
                 apache-jsp,apache-jstl,jetty-start
@@ -262,6 +262,33 @@
               <includeTypes>jar</includeTypes>
               <classifier>sources</classifier>
               <outputDirectory>${source-assembly-directory}/lib/http2</outputDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>copy-lib-http3-deps</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <includeGroupIds>org.eclipse.jetty.http3,org.eclipse.jetty.quic,org.eclipse.jetty.quiche</includeGroupIds>
+              <includeArtifactIds>http3-server,http3-common,http3-qpack,quic-server,quic-common,quic-quiche-common,quic-quiche-jna,quic-quiche-foreign-incubator,jetty-quiche-native</includeArtifactIds>
+              <includeTypes>jar</includeTypes>
+              <outputDirectory>${assembly-directory}/lib/http3</outputDirectory>
+            </configuration>
+          </execution>
+          <execution>
+            <id>copy-lib-http3-src-deps</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <includeGroupIds>org.eclipse.jetty.http3</includeGroupIds>
+              <includeArtifactIds>http3-server</includeArtifactIds>
+              <includeTypes>jar</includeTypes>
+              <classifier>sources</classifier>
+              <outputDirectory>${source-assembly-directory}/lib/http3</outputDirectory>
             </configuration>
           </execution>
           <execution>
@@ -691,6 +718,10 @@
       <artifactId>http2-server</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.eclipse.jetty.http3</groupId>
+      <artifactId>http3-server</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-alpn-server</artifactId>
     </dependency>
@@ -843,11 +874,6 @@
       <version>${project.version}</version>
       <classifier>config</classifier>
       <type>jar</type>
-      <optional>true</optional>
-    </dependency>
-    <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
       <optional>true</optional>
     </dependency>
     <dependency>

@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -209,8 +209,16 @@ public abstract class HttpServerTestBase extends HttpServerTestFixture
             byte[] buffer = new byte[64 * 1024];
             Arrays.fill(buffer, (byte)'A');
 
-            os.write(buffer);
-            os.flush();
+            try
+            {
+                os.write(buffer);
+                os.flush();
+            }
+            catch (Exception e)
+            {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("write exception", e);
+            }
 
             // Read the response.
             String response = readResponse(client);

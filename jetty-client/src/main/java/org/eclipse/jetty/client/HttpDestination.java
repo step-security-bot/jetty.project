@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -62,7 +62,7 @@ public abstract class HttpDestination extends ContainerLifeCycle implements Dest
     private final RequestTimeouts requestTimeouts;
     private ConnectionPool connectionPool;
 
-    public HttpDestination(HttpClient client, Origin origin)
+    public HttpDestination(HttpClient client, Origin origin, boolean intrinsicallySecure)
     {
         this.client = client;
         this.origin = origin;
@@ -85,12 +85,12 @@ public abstract class HttpDestination extends ContainerLifeCycle implements Dest
         if (proxy != null)
         {
             connectionFactory = proxy.newClientConnectionFactory(connectionFactory);
-            if (proxy.isSecure())
+            if (!intrinsicallySecure && proxy.isSecure())
                 connectionFactory = newSslClientConnectionFactory(proxy.getSslContextFactory(), connectionFactory);
         }
         else
         {
-            if (isSecure())
+            if (!intrinsicallySecure && isSecure())
                 connectionFactory = newSslClientConnectionFactory(null, connectionFactory);
         }
         Object tag = origin.getTag();
@@ -132,7 +132,10 @@ public abstract class HttpDestination extends ContainerLifeCycle implements Dest
 
     protected Queue<HttpExchange> newExchangeQueue(HttpClient client)
     {
-        return new BlockingArrayQueue<>(client.getMaxRequestsQueuedPerDestination());
+        int maxCapacity = client.getMaxRequestsQueuedPerDestination();
+        if (maxCapacity > 32)
+            return new BlockingArrayQueue<>(32, 32, maxCapacity);
+        return new BlockingArrayQueue<>(maxCapacity);
     }
 
     protected ClientConnectionFactory newSslClientConnectionFactory(SslContextFactory.Client sslContextFactory, ClientConnectionFactory connectionFactory)

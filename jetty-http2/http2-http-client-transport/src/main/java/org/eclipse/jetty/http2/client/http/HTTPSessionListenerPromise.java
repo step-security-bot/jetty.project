@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -100,11 +100,12 @@ class HTTPSessionListenerPromise extends Session.Listener.Adapter implements Pro
     public boolean onIdleTimeout(Session session)
     {
         long idleTimeout = ((HTTP2Session)session).getEndPoint().getIdleTimeout();
-        if (failConnectionPromise(new TimeoutException("Idle timeout expired: " + idleTimeout + " ms")))
+        TimeoutException failure = new TimeoutException("Idle timeout expired: " + idleTimeout + " ms");
+        if (failConnectionPromise(failure))
             return true;
         HttpConnectionOverHTTP2 connection = this.connection.getReference();
         if (connection != null)
-            return connection.onIdleTimeout(idleTimeout);
+            return connection.onIdleTimeout(idleTimeout, failure);
         return true;
     }
 

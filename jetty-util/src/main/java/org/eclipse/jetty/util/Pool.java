@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -339,7 +339,7 @@ public class Pool<T> implements AutoCloseable, Dumpable
                 return null;
 
             // If we have no space
-            if (entries.size() >= maxEntries)
+            if (maxEntries > 0 && entries.size() >= maxEntries)
                 return null;
 
             Entry entry = newEntry();
@@ -870,10 +870,10 @@ public class Pool<T> implements AutoCloseable, Dumpable
                     return false;
                 T pooled = getPooled();
                 int maxUsageCount = getMaxUsageCount(pooled);
+                if (maxUsageCount > 0 && usageCount >= maxUsageCount)
+                    return false;
                 int maxMultiplexed = getMaxMultiplex(pooled);
                 if (maxMultiplexed > 0 && multiplexCount >= maxMultiplexed)
-                    return false;
-                if (maxUsageCount > 0 && usageCount >= maxUsageCount)
                     return false;
 
                 // Prevent overflowing the usage counter by capping it at Integer.MAX_VALUE.
@@ -911,7 +911,7 @@ public class Pool<T> implements AutoCloseable, Dumpable
                     break;
             }
 
-            int currentMaxUsageCount = maxUsage;
+            int currentMaxUsageCount = getMaxUsageCount(getPooled());
             boolean overUsed = currentMaxUsageCount > 0 && usageCount >= currentMaxUsageCount;
             return !(overUsed && newMultiplexCount == 0);
         }

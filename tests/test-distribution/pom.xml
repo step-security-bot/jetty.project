@@ -2,11 +2,12 @@
   <parent>
     <groupId>org.eclipse.jetty.tests</groupId>
     <artifactId>tests-parent</artifactId>
-    <version>10.0.7-SNAPSHOT</version>
+    <version>10.0.12-SNAPSHOT</version>
   </parent>
 
   <modelVersion>4.0.0</modelVersion>
   <artifactId>test-distribution</artifactId>
+  <name>Jetty Tests :: Distribution Tests</name>
   <packaging>jar</packaging>
 
   <properties>
@@ -49,6 +50,18 @@
     </dependency>
     <dependency>
       <groupId>org.apache.maven.resolver</groupId>
+      <artifactId>maven-resolver-impl</artifactId>
+      <version>${maven.resolver.version}</version>
+      <exclusions>
+        <!-- Used when running in SISU container to manage beans lifecycle (of locking factories) -->
+        <exclusion>
+          <groupId>javax.annotation</groupId>
+          <artifactId>javax.annotation-api</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven.resolver</groupId>
       <artifactId>maven-resolver-connector-basic</artifactId>
       <version>${maven.resolver.version}</version>
     </dependency>
@@ -82,6 +95,11 @@
     <dependency>
       <groupId>org.eclipse.jetty.http2</groupId>
       <artifactId>http2-http-client-transport</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty.http3</groupId>
+      <artifactId>http3-http-client-transport</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -144,6 +162,11 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-openid</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.eclipse.jetty.tests</groupId>
       <artifactId>test-felix-webapp</artifactId>
       <version>${project.version}</version>
@@ -177,6 +200,11 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>gcloud</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>mongodb</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

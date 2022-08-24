@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -21,6 +21,7 @@ import java.net.CookieStore;
 import java.net.HttpCookie;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -61,6 +62,8 @@ import org.eclipse.jetty.http.HttpVersion;
 import org.eclipse.jetty.http2.client.HTTP2Client;
 import org.eclipse.jetty.http2.client.http.ClientConnectionFactoryOverHTTP2;
 import org.eclipse.jetty.http2.client.http.HttpClientTransportOverHTTP2;
+import org.eclipse.jetty.http3.client.HTTP3Client;
+import org.eclipse.jetty.http3.client.http.HttpClientTransportOverHTTP3;
 import org.eclipse.jetty.io.ByteBufferPool;
 import org.eclipse.jetty.io.ClientConnectionFactory;
 import org.eclipse.jetty.io.ClientConnector;
@@ -724,6 +727,21 @@ public class HTTPClientDocs
         // end::http2Transport[]
     }
 
+    public void http3Transport() throws Exception
+    {
+        // tag::http3Transport[]
+        // The HTTP3Client powers the HTTP/3 transport.
+        HTTP3Client h3Client = new HTTP3Client();
+        h3Client.getQuicConfiguration().setSessionRecvWindow(64 * 1024 * 1024);
+
+        // Create and configure the HTTP/3 transport.
+        HttpClientTransportOverHTTP3 transport = new HttpClientTransportOverHTTP3(h3Client);
+
+        HttpClient client = new HttpClient(transport);
+        client.start();
+        // end::http3Transport[]
+    }
+
     public void fcgiTransport() throws Exception
     {
         // tag::fcgiTransport[]
@@ -854,5 +872,33 @@ public class HTTPClientDocs
                 destination,
                 maxRequestsPerConnection));
         // end::setConnectionPool[]
+    }
+
+    public void unixDomain() throws Exception
+    {
+        // tag::unixDomain[]
+        // This is the path where the server "listens" on.
+        Path unixDomainPath = Path.of("/path/to/server.sock");
+
+        // Creates a ClientConnector that uses Unix-Domain
+        // sockets, not the network, to connect to the server.
+        ClientConnector unixDomainClientConnector = ClientConnector.forUnixDomain(unixDomainPath);
+
+        // Use Unix-Domain for HTTP/1.1.
+        HttpClientTransportOverHTTP http1Transport = new HttpClientTransportOverHTTP(unixDomainClientConnector);
+
+        // You can use Unix-Domain also for HTTP/2.
+        HTTP2Client http2Client = new HTTP2Client(unixDomainClientConnector);
+        HttpClientTransportOverHTTP2 http2Transport = new HttpClientTransportOverHTTP2(http2Client);
+
+        // You can also use UnixDomain for the dynamic transport.
+        ClientConnectionFactory.Info http1 = HttpClientConnectionFactory.HTTP11;
+        ClientConnectionFactoryOverHTTP2.HTTP2 http2 = new ClientConnectionFactoryOverHTTP2.HTTP2(http2Client);
+        HttpClientTransportDynamic dynamicTransport = new HttpClientTransportDynamic(unixDomainClientConnector, http1, http2);
+
+        // Choose the transport you prefer for HttpClient, for example the dynamic transport.
+        HttpClient httpClient = new HttpClient(dynamicTransport);
+        httpClient.start();
+        // end::unixDomain[]
     }
 }

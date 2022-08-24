@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -15,6 +15,7 @@ package org.eclipse.jetty.start;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -69,7 +70,10 @@ public class Modules implements Iterable<Module>
             Path deprecatedPath = _baseHome.getPath("modules/deprecated.properties");
             if (deprecatedPath != null && FS.exists(deprecatedPath))
             {
-                _deprecated.load(new FileInputStream(deprecatedPath.toFile()));
+                try (FileInputStream inputStream = new FileInputStream(deprecatedPath.toFile()))
+                {
+                    _deprecated.load(inputStream);
+                }
             }
         }
         catch (IOException e)
@@ -78,7 +82,7 @@ public class Modules implements Iterable<Module>
         }
     }
 
-    public void showModules(List<String> modules)
+    public void showModules(PrintStream out, List<String> modules)
     {
         Stream<Module> stream = (modules.contains("*") || modules.isEmpty())
             ? _modules.stream().sorted()
@@ -92,20 +96,20 @@ public class Modules implements Iterable<Module>
             String label;
             Set<String> provides = module.getProvides();
             provides.remove(module.getName());
-            System.out.printf("%n     Module: %s %s%n", module.getName(), provides.size() > 0 ? provides : "");
+            out.printf("%n     Module: %s %s%n", module.getName(), provides.size() > 0 ? provides : "");
             for (String description : module.getDescription())
             {
-                System.out.printf("           : %s%n", description);
+                out.printf("           : %s%n", description);
             }
             if (!module.getTags().isEmpty())
             {
                 label = "       Tags: %s";
                 for (String t : module.getTags())
                 {
-                    System.out.printf(label, t);
+                    out.printf(label, t);
                     label = ", %s";
                 }
-                System.out.println();
+                out.println();
             }
             if (!module.getDepends().isEmpty())
             {
@@ -113,60 +117,60 @@ public class Modules implements Iterable<Module>
                 for (String parent : module.getDepends())
                 {
                     parent = Module.normalizeModuleName(parent);
-                    System.out.printf(label, parent);
+                    out.printf(label, parent);
                     if (Module.isConditionalDependency(parent))
-                        System.out.print(" [conditional]");
+                        out.print(" [conditional]");
                     label = ", %s";
                 }
-                System.out.println();
+                out.println();
             }
             if (!module.getBefore().isEmpty())
             {
                 label = "     Before: %s";
                 for (String before : module.getBefore())
                 {
-                    System.out.printf(label, before);
+                    out.printf(label, before);
                     label = ", %s";
                 }
-                System.out.println();
+                out.println();
             }
             if (!module.getAfter().isEmpty())
             {
                 label = "      After: %s";
                 for (String after : module.getAfter())
                 {
-                    System.out.printf(label, after);
+                    out.printf(label, after);
                     label = ", %s";
                 }
-                System.out.println();
+                out.println();
             }
             for (String lib : module.getLibs())
             {
-                System.out.printf("        LIB: %s%n", lib);
+                out.printf("        LIB: %s%n", lib);
             }
             for (String xml : module.getXmls())
             {
-                System.out.printf("        XML: %s%n", xml);
+                out.printf("        XML: %s%n", xml);
             }
             for (String jpms : module.getJPMS())
             {
-                System.out.printf("        JPMS: %s%n", jpms);
+                out.printf("        JPMS: %s%n", jpms);
             }
             for (String jvm : module.getJvmArgs())
             {
-                System.out.printf("        JVM: %s%n", jvm);
+                out.printf("        JVM: %s%n", jvm);
             }
             if (module.isEnabled())
             {
                 for (String selection : module.getEnableSources())
                 {
-                    System.out.printf("    Enabled: %s%n", selection);
+                    out.printf("    Enabled: %s%n", selection);
                 }
             }
         });
     }
 
-    public void listModules(List<String> tags)
+    public void listModules(PrintStream out, List<String> tags)
     {
         if (tags.contains("-*"))
             return;
@@ -185,7 +189,7 @@ public class Modules implements Iterable<Module>
             excluded.add("internal");
 
         Predicate<Module> filter = m -> (included.isEmpty() || m.getTags().stream().anyMatch(included::contains)) &&
-            !m.getTags().stream().anyMatch(excluded::contains);
+            m.getTags().stream().noneMatch(excluded::contains);
 
         Optional<Integer> max = _modules.stream().filter(filter).map(Module::getName).map(String::length).max(Integer::compareTo);
         if (max.isEmpty())
@@ -199,35 +203,37 @@ public class Modules implements Iterable<Module>
             if (!wild && !module.getPrimaryTag().equals(tag.get()))
             {
                 tag.set(module.getPrimaryTag());
-                System.out.printf("%n%s modules:", module.getPrimaryTag());
-                System.out.printf("%n%s---------%n", "-".repeat(module.getPrimaryTag().length()));
+                out.printf("%n%s modules:", module.getPrimaryTag());
+                out.printf("%n%s---------%n", "-".repeat(module.getPrimaryTag().length()));
             }
 
             List<String> description = module.getDescription();
-            System.out.printf(format, module.getName(), description != null && description.size() > 0 ? description.get(0) : "");
+            out.printf(format, module.getName(), description != null && description.size() > 0 ? description.get(0) : "");
         });
     }
 
-    public void listEnabled()
+    public void listEnabled(PrintStream out)
     {
-        System.out.println();
-        System.out.println("Enabled Modules:");
-        System.out.println("----------------");
+        out.println();
+        out.println("Enabled Modules:");
+        out.println("----------------");
 
         int i = 0;
         List<Module> enabled = getEnabled();
         for (Module module : enabled)
         {
-            String name = module.getName();
             String index = (i++) + ")";
+            String name = module.getName();
+            if (!module.getDeprecated().isEmpty())
+                name += " (deprecated)";
             for (String s : module.getEnableSources())
             {
-                System.out.printf("  %4s %-15s %s%n", index, name, s);
+                out.printf("%4s %-25s %s%n", index, name, s);
                 index = "";
                 name = "";
             }
             if (module.isTransitive() && module.hasIniTemplate())
-                System.out.printf("                       init template available with --add-module=%s%n", module.getName());
+                out.printf(" ".repeat(31) + "ini template available with --add-module=%s%n", module.getName());
         }
     }
 
@@ -389,7 +395,6 @@ public class Modules implements Iterable<Module>
                 order.add(name);
             }
         }
-
         return order;
     }
 
@@ -419,6 +424,13 @@ public class Modules implements Iterable<Module>
         {
             StartLog.debug("Already enabled [%s] from %s", module.getName(), module.getEnableSources());
             return;
+        }
+
+        List<String> deprecated = module.getDeprecated();
+        if (!deprecated.isEmpty())
+        {
+            String reason = deprecated.stream().collect(Collectors.joining(System.lineSeparator()));
+            StartLog.warn(reason);
         }
 
         // Check that this is not already provided by another module!

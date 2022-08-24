@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.HttpClientTransport;
 import org.eclipse.jetty.client.LeakTrackingConnectionPool;
+import org.eclipse.jetty.client.api.Connection;
 import org.eclipse.jetty.fcgi.client.http.HttpClientTransportOverFCGI;
 import org.eclipse.jetty.http.HttpScheme;
 import org.eclipse.jetty.io.ByteBufferPool;
@@ -71,7 +72,7 @@ public abstract class AbstractHttpClientServerTest
         transport.setConnectionPoolFactory(destination -> new LeakTrackingConnectionPool(destination, client.getMaxConnectionsPerDestination(), destination)
         {
             @Override
-            protected void leaked(LeakDetector.LeakInfo leakInfo)
+            protected void leaked(LeakDetector<Connection>.LeakInfo leakInfo)
             {
                 connectionLeaks.incrementAndGet();
             }

@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -38,6 +38,24 @@ public interface Callback extends Invocable
             return InvocationType.NON_BLOCKING;
         }
     };
+
+    /**
+     * <p>Completes this callback with the given {@link CompletableFuture}.</p>
+     * <p>When the CompletableFuture completes normally, this callback is succeeded;
+     * when the CompletableFuture completes exceptionally, this callback is failed.</p>
+     *
+     * @param completable the CompletableFuture that completes this callback
+     */
+    default void completeWith(CompletableFuture<?> completable)
+    {
+        completable.whenComplete((o, x) ->
+        {
+            if (x == null)
+                succeeded();
+            else
+                failed(x);
+        });
+    }
 
     /**
      * <p>Callback invoked when the operation completes.</p>
@@ -169,6 +187,26 @@ public interface Callback extends Invocable
     }
 
     /**
+     * <p>Creates a Callback with the given {@code invocationType},
+     * that runs the given {@code Runnable} when it succeeds or fails.</p>
+     *
+     * @param invocationType the invocation type of the returned Callback
+     * @param completed the Runnable to run when the callback either succeeds or fails
+     * @return a new Callback with the given invocation type
+     */
+    static Callback from(InvocationType invocationType, Runnable completed)
+    {
+        return new Completing(invocationType)
+        {
+            @Override
+            public void completed()
+            {
+                completed.run();
+            }
+        };
+    }
+
+    /**
      * Creates a nested callback that runs completed after
      * completing the nested callback.
      *
@@ -283,8 +321,23 @@ public interface Callback extends Invocable
         };
     }
 
+    /**
+     * <p>A Callback implementation that calls the {@link #completed()} method when it either succeeds or fails.</p>
+     */
     class Completing implements Callback
     {
+        private final InvocationType invocationType;
+
+        public Completing()
+        {
+            this(InvocationType.BLOCKING);
+        }
+
+        public Completing(InvocationType invocationType)
+        {
+            this.invocationType = invocationType;
+        }
+
         @Override
         public void succeeded()
         {
@@ -295,6 +348,12 @@ public interface Callback extends Invocable
         public void failed(Throwable x)
         {
             completed();
+        }
+
+        @Override
+        public InvocationType getInvocationType()
+        {
+            return invocationType;
         }
 
         public void completed()
