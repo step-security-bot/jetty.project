@@ -10,4 +10,4 @@ ee10
 server
 
 [lib]
-lib/jetty-ee10-security-${jetty.version}.jar
+lib/jetty-ee10-servlet-${jetty.version}.jar
