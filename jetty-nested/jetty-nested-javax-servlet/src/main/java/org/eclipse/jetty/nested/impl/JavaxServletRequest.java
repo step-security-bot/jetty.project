@@ -1,6 +1,6 @@
 //
 // ========================================================================
-// Copyright (c) 1995-2021 Mort Bay Consulting Pty Ltd and others.
+// Copyright (c) 1995-2022 Mort Bay Consulting Pty Ltd and others.
 //
 // This program and the accompanying materials are made available under the
 // terms of the Eclipse Public License v. 2.0 which is available at
@@ -18,12 +18,9 @@ import java.net.URI;
 import java.util.Collections;
 import java.util.Set;
 import java.util.function.Consumer;
-
 import javax.servlet.AsyncContext;
 import javax.servlet.ServletInputStream;
-import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.http.HttpURI;
@@ -58,9 +55,9 @@ public class JavaxServletRequest implements Request
 
     // TODO: this had a Jetty Specific type in it
     @Override
-    public URI getURI()
+    public HttpURI getURI()
     {
-        return URI.create(_httpServletRequest.getRequestURI());
+        return HttpURI.build(_httpServletRequest.getRequestURI());
     }
 
     @Override
