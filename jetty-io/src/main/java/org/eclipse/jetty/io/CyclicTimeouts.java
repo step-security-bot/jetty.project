@@ -105,7 +105,7 @@ public abstract class CyclicTimeouts<T extends CyclicTimeouts.Expirable> impleme
             if (expiresAt == -1)
                 continue;
 
-            if (expiresAt <= now)
+            if (expiresAt <= now) // TODO broken!
             {
                 boolean remove = onExpired(expirable);
                 if (LOG.isDebugEnabled())
