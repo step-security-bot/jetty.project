@@ -551,6 +551,7 @@ public class HttpClientTest extends AbstractHttpClientServerTest
             }
         });
 
+        client.setRemoveIdleDestinations(true);
         client.setIdleTimeout(1000);
         client.setMaxConnectionsPerDestination(1);
 
