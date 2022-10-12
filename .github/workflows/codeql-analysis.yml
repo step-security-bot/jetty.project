@@ -30,11 +30,11 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8
 
       # Install and setup JDK 11
       - name: Setup JDK 11
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@a18c333f3f14249953dab3e186e5e21bf3390f1d
         if: ${{
           startsWith(github.ref, 'refs/heads/jetty-10.') ||
           startsWith(github.ref, 'refs/heads/jetty-11.') ||
@@ -48,7 +48,7 @@ jobs:
 
       # Install and setup JDK 17
       - name: Setup JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@a18c333f3f14249953dab3e186e5e21bf3390f1d
         if: ${{
           startsWith(github.ref, 'refs/heads/jetty-12.') ||
           startsWith(github.base_ref, 'jetty-12.')
@@ -60,7 +60,7 @@ jobs:
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@807578363a7869ca324a79039e6db9c843e0e100
         with:
           languages: ${{ matrix.language }}
           # If you wish to specify custom queries, you can do so here or in a config file.
@@ -71,7 +71,7 @@ jobs:
           # queries: security-extended,security-and-quality
           
       - name: Set up Maven
-        uses: stCarolas/setup-maven@v4
+        uses: stCarolas/setup-maven@1d56b37995622db66cce1214d81014b09807fb5a
         with:
           maven-version: 3.8.6   
 
@@ -89,4 +89,4 @@ jobs:
       #   ./location_of_script_within_repo/buildscript.sh
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@807578363a7869ca324a79039e6db9c843e0e100

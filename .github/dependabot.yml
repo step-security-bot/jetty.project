@@ -95,3 +95,9 @@ updates:
         versions: [ ">=5.0.0" ]
       - dependency-name: "org.infinispan:*"
         versions: [ ">=12" ]
+
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
